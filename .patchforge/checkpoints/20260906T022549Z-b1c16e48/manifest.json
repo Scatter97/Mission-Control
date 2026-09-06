@@ -1,0 +1,171 @@
+{
+  "version": 2,
+  "checkpoint_id": "20260906T022549Z-b1c16e48",
+  "created_utc": "2026-09-06T02:25:49.966148+00:00",
+  "label": "Mission Control v0.1.0 - Bootstrap Foundation",
+  "repo": "C:\\Users\\joshh\\Desktop\\Mission-Control",
+  "files": [
+    {
+      "path": ".gitignore",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "e0aa0870c41b74392c75f6e99c9fedb25727fbf0ce942e483fe195c6cbc5064e"
+    },
+    {
+      "path": "package.json",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "e00a2ffebd79064a40f57aa5fe731e04f4ad950530e15b6b0875cb050d322d5c"
+    },
+    {
+      "path": "index.html",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "b5fec17d13277d1237b6363895f3e499d6709abc86b9a92b3cd85a6188172c1f"
+    },
+    {
+      "path": "tsconfig.json",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "f6870f7c1e6097a959591a8f17a533bf37a39631313bd15116edcd9ba7fbefb7"
+    },
+    {
+      "path": "tsconfig.node.json",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "9c34ec6583044341468aa0d6a7c8744d1f15a588eaf5f9003d0659ee2459c7ae"
+    },
+    {
+      "path": "vite.config.ts",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "3276a5fb4d22676b37bf247fece3eec1bc0c094f08464b466ece14ccf0fe0c30"
+    },
+    {
+      "path": "src/vite-env.d.ts",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "b440b802c2cfeac6a24eda510bd63c1f23c6ab5c52bcfe3a32a918dbad6b46c8"
+    },
+    {
+      "path": "src/main.tsx",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "e456a4aee60f44eaa36e14d9a23897c4b351e2dedc02f57bb82b0317611e562b"
+    },
+    {
+      "path": "src/app/App.tsx",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "c76097e615c9e91a5319254acdf09125026bc3cce45ae36b5f8ce895c38f75c4"
+    },
+    {
+      "path": "src/app/modules/types.ts",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "72eb123e6a7a88b5242bebe626e070282bba8475b31647ed8bf32e3ebc0183c5"
+    },
+    {
+      "path": "src/app/modules/registry.ts",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "a747def99d1f1d41a085ce14ef38d790a35a3dc09ab4f084af4896d833d9cba3"
+    },
+    {
+      "path": "src/app/shell/AppShell.tsx",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "1d53cd53d6a4cb51bb79b7bd4ef73026e74f7f308e6049d9a34b3e8f68895224"
+    },
+    {
+      "path": "src/app/theme/ThemeProvider.tsx",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "98e39041866c4a5f5b55f1246bc01d4885cb4473f996bf4d750605a1ebf552cd"
+    },
+    {
+      "path": "src/app/theme/tokens.css",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "5202657de9999256650b9c203c437bc7fc23cd5bc1d013c4d3799d80328da4b8"
+    },
+    {
+      "path": "src/backend/types.ts",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "3184d00889c5871ce180a2ec097d72eca382b695883916e89db89238cdf0ee77"
+    },
+    {
+      "path": "src/backend/localBackend.ts",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "623be2cefcfd6238741ea489349c6db7cb805ad5da51a57060d832b1e5d4589f"
+    },
+    {
+      "path": "src/backend/BackendProvider.tsx",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "1d886b2b3826867084dd713e0db4617a83f829100f648dd863a1576d7309f0fe"
+    },
+    {
+      "path": "src/modules/projects/module.tsx",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "321d750fdd6eb9690b11fe8777fad169aa1120a0b9dc93265cf306693eb7142e"
+    },
+    {
+      "path": "src/modules/projects/pages/ProjectsPage.tsx",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "fa590fbd7fc73031214191c875cfbf36eb2ea92191d2999ede63cf63b82614c3"
+    },
+    {
+      "path": "src/modules/settings/module.tsx",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "6ea5ab56ee5be9f42a0ddc0d065e41c65ab53cad209b9cfe12a7b65088d7e652"
+    },
+    {
+      "path": "src/modules/settings/SettingsPage.tsx",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "a129d5c8616e8fc8bceda004323aadc3206d54bcd8987d814be88456e0fd0a38"
+    },
+    {
+      "path": "src/styles/globals.css",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "6d727743931d11a84ebcb2e62472ab391510fb2b365fe201c0924640eaf00dbe"
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "bc6cb601252a42e42fd17497f9ae08be8dc5277e55f0a052d272e36d2600beee"
+    },
+    {
+      "path": "src-tauri/build.rs",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "056a51c06dc223d06896cdc9611aec38afe0fb62520555b2393d9425b8f3d31b"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "e45d9abc74ab39bd270b2aeba381f317e45aeda526bbc54509230ee4b4b6ef89"
+    },
+    {
+      "path": "src-tauri/src/main.rs",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "882c472a75fc0c52c8cc3af6ad9c3b32bc137dc439976c6200c6365e7232167b"
+    },
+    {
+      "path": "src-tauri/src/lib.rs",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "d4351eeecf8e456fa9cb550cc24e9c6ff2da3fcc706d7d5c7a02e6bbf22ac0c4"
+    }
+  ]
+}

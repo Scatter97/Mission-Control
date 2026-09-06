@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "checkpoint_id": "20260906T022925Z-bbfca447",
+  "created_utc": "2026-09-06T02:29:25.345887+00:00",
+  "label": "Mission Control v0.1.0 - Development Icon",
+  "repo": "C:\\Users\\joshh\\Desktop\\Mission-Control",
+  "files": [
+    {
+      "path": "scripts/generate_dev_icon.py",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "642d14d086437f16cbf2086dd0483a20f5ffe498be8d3923e47b33363f04d7c4"
+    }
+  ]
+}
