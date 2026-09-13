@@ -35,12 +35,14 @@ export function ProjectDetailPage() {
   }
 
   async function handleArchive() {
+    if (!project) return;
     if (!window.confirm(`Archive "${project.name}"?`)) return;
     await archiveProject.mutateAsync(project.id);
     navigate("/projects");
   }
 
   async function handleDelete() {
+    if (!project) return;
     if (!window.confirm(`Permanently delete "${project.name}"?`)) return;
     await deleteProject.mutateAsync(project.id);
     navigate("/projects");
