@@ -1,16 +1,14 @@
 {
   "schemaVersion": 1,
   "name": "Mission Control",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "status": "active",
   "currentPhase": "Repository integration",
-  "currentStep": "Add authenticated GitHub account connection",
+  "currentStep": "Sync GitHub repository metadata automatically",
   "currentStepStatus": "todo",
   "currentStepPriority": "medium",
-  "lastCompletedStep": "Add GitHub repository import with local project config discovery",
+  "lastCompletedStep": "Add authenticated GitHub account connection and private repository access",
   "nextSteps": [
-    "Add authenticated GitHub account connection",
-    "Add private repository access",
     "Sync GitHub repository metadata automatically"
   ],
   "blockers": [],

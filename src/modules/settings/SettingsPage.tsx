@@ -24,6 +24,7 @@ import {
   useTheme,
   type ThemePreference
 } from "../../app/theme/ThemeProvider";
+import { GitHubIntegrationSettings } from "../github/GitHubIntegrationSettings";
 import {
   DEFAULT_SHORTCUTS,
   UI_SCALE_OPTIONS,
@@ -461,10 +462,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeSection === "integrations" ? (
-            <PlaceholderSettings
-              title="Integrations"
-              description="GitHub, Patch Forge, local AI providers, and other integrations will be configured here."
-            />
+            <GitHubIntegrationSettings />
           ) : null}
 
           {activeSection === "data" ? (
@@ -496,7 +494,7 @@ export function SettingsPage() {
                 <dl className="mc-about-list">
                   <div>
                     <dt>Version</dt>
-                    <dd>0.1.3</dd>
+                    <dd>0.1.4</dd>
                   </div>
 
                   <div>

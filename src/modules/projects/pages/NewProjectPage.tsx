@@ -20,7 +20,7 @@ export function NewProjectPage() {
   const createProject = useCreateProject();
 
   const [mode, setMode] =
-    useState<CreateMode>("manual");
+    useState<CreateMode>("github");
 
   const create = async (
     input: Parameters<

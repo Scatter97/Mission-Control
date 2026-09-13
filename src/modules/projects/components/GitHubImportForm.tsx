@@ -5,9 +5,13 @@ import {
   Github,
   GitBranch,
   Lock,
+  Search,
   Unlock
 } from "lucide-react";
 import {
+  useEffect,
+  useMemo,
+  useRef,
   useState,
   type FormEvent
 } from "react";
@@ -22,6 +26,9 @@ import {
   type StepPriority,
   type StepStatus
 } from "../types";
+import {
+  useGitHubAccount
+} from "../../github/githubAccountStore";
 
 interface GitHubRepositoryPreview {
   name: string;
@@ -31,6 +38,13 @@ interface GitHubRepositoryPreview {
   description: string | null;
   isPrivate: boolean;
   defaultBranch: string;
+}
+
+
+interface GitHubAccount {
+  login: string;
+  avatarUrl: string;
+  htmlUrl: string;
 }
 
 interface GitHubImportFormProps {
@@ -120,6 +134,14 @@ function configRepositoryUrl(
   return typeof url === "string"
     ? url
     : null;
+}
+
+function looksLikeGitHubRepositoryUrl(
+  value: string
+): boolean {
+  return /^https?:\/\/(?:www\.)?github\.com\/[^/\s]+\/[^/\s]+\/?(?:\.git)?$/i.test(
+    value.trim()
+  );
 }
 
 function normalizedRepositoryUrl(
@@ -248,8 +270,66 @@ export function GitHubImportForm({
   const [loadingRepository, setLoadingRepository] =
     useState(false);
 
+  const accountState =
+    useGitHubAccount() as
+      | GitHubAccount
+      | null
+      | undefined;
+
+  const account =
+    accountState ?? null;
+
+  const [repositories, setRepositories] =
+    useState<GitHubRepositoryPreview[]>([]);
+
+  const [repositorySearch, setRepositorySearch] =
+    useState("");
+
+  const [
+    loadingRepositories,
+    setLoadingRepositories
+  ] = useState(false);
+
+  const [
+    repositoriesLoaded,
+    setRepositoriesLoaded
+  ] = useState(false);
+
+  const [
+    manualUrlOpen,
+    setManualUrlOpen
+  ] = useState(false);
+
+  const urlRequestId =
+    useRef(0);
+
   const [error, setError] =
     useState<string | null>(null);
+
+  const filteredRepositories =
+    useMemo(() => {
+      const query =
+        repositorySearch
+          .trim()
+          .toLowerCase();
+
+      if (!query) {
+        return repositories;
+      }
+
+      return repositories.filter(
+        (item) =>
+          item.fullName
+            .toLowerCase()
+            .includes(query) ||
+          (item.description ?? "")
+            .toLowerCase()
+            .includes(query)
+      );
+    }, [
+      repositories,
+      repositorySearch
+    ]);
 
   async function readConfig(
     path: string
@@ -273,12 +353,10 @@ export function GitHubImportForm({
     return config;
   }
 
-  async function handleLoadRepository() {
-    if (!repoUrl.trim()) {
-      setError("GitHub repository URL is required.");
-      return;
-    }
-
+  async function loadRepositoryUrl(
+    value: string,
+    requestId?: number
+  ) {
     try {
       setError(null);
       setLoadingRepository(true);
@@ -287,19 +365,113 @@ export function GitHubImportForm({
         await invoke<GitHubRepositoryPreview>(
           "github_repository_preview",
           {
-            url: repoUrl.trim()
+            url: value.trim()
           }
         );
+
+      if (
+        requestId !== undefined &&
+        requestId !== urlRequestId.current
+      ) {
+        return;
+      }
 
       setRepository(result);
       setRepoUrl(result.htmlUrl);
     } catch (loadError) {
+      if (
+        requestId !== undefined &&
+        requestId !== urlRequestId.current
+      ) {
+        return;
+      }
+
       setRepository(null);
       setError(String(loadError));
     } finally {
-      setLoadingRepository(false);
+      if (
+        requestId === undefined ||
+        requestId === urlRequestId.current
+      ) {
+        setLoadingRepository(false);
+      }
     }
   }
+
+  async function handleBrowseRepositories() {
+    try {
+      setError(null);
+      setLoadingRepositories(true);
+
+      const result =
+        await invoke<GitHubRepositoryPreview[]>(
+          "github_repositories"
+        );
+
+      setRepositories(result);
+      setRepositorySearch("");
+      setRepositoriesLoaded(true);
+    } catch (browseError) {
+      setError(String(browseError));
+    } finally {
+      setLoadingRepositories(false);
+    }
+  }
+
+  function selectRepository(
+    selected: GitHubRepositoryPreview
+  ) {
+    setRepository(selected);
+    setRepoUrl(selected.htmlUrl);
+    setManualUrlOpen(false);
+    setError(null);
+  }
+
+  useEffect(() => {
+    if (
+      !account ||
+      repositoriesLoaded ||
+      loadingRepositories
+    ) {
+      return;
+    }
+
+    void handleBrowseRepositories();
+  }, [
+    account,
+    repositoriesLoaded,
+    loadingRepositories
+  ]);
+
+  useEffect(() => {
+    if (!manualUrlOpen) {
+      return;
+    }
+
+    const value = repoUrl.trim();
+
+    if (!looksLikeGitHubRepositoryUrl(value)) {
+      return;
+    }
+
+    const requestId =
+      ++urlRequestId.current;
+
+    const timer =
+      window.setTimeout(() => {
+        void loadRepositoryUrl(
+          value,
+          requestId
+        );
+      }, 450);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [
+    repoUrl,
+    manualUrlOpen
+  ]);
 
   async function handleBrowseLocalFolder() {
     try {
@@ -328,7 +500,7 @@ export function GitHubImportForm({
 
     if (!repository) {
       setError(
-        "Load a GitHub repository before importing it."
+        "Choose a GitHub repository before importing it."
       );
       return;
     }
@@ -426,36 +598,188 @@ export function GitHubImportForm({
         </div>
 
         <div className="mc-form-section-fields">
-          <label className="mc-field">
-            <span>GitHub repository URL</span>
+          {account ? (
+            <>
+              <div className="mc-github-connected-row">
+                <div>
+                  <img
+                    className="mc-github-connected-avatar"
+                    src={account.avatarUrl}
+                    alt=""
+                  />
 
-            <div className="mc-github-url-row">
-              <input
-                autoFocus
-                value={repoUrl}
-                placeholder="https://github.com/owner/repository"
-                onChange={(event) => {
-                  setRepoUrl(event.target.value);
-                  setRepository(null);
-                }}
-              />
+                  <span>
+                    Connected as
+                    <strong>
+                      @{account.login}
+                    </strong>
+                  </span>
+                </div>
 
-              <button
-                className="mc-button"
-                type="button"
-                disabled={loadingRepository}
-                onClick={() =>
-                  void handleLoadRepository()
-                }
-              >
-                <Github size={14} />
+                <span className="mc-github-repository-count">
+                  {loadingRepositories
+                    ? "Loading repositories..."
+                    : repositoriesLoaded
+                      ? `${repositories.length} repositories`
+                      : ""}
+                </span>
+              </div>
 
-                {loadingRepository
-                  ? "Loading..."
-                  : "Load repository"}
-              </button>
-            </div>
-          </label>
+              <div className="mc-github-repository-browser mc-github-primary-browser">
+                <div className="mc-github-browser-heading">
+                  <div>
+                    <strong>
+                      Choose repository
+                    </strong>
+
+                    <span>
+                      Select an authorized GitHub repository.
+                    </span>
+                  </div>
+
+                  <button
+                    className="mc-button"
+                    type="button"
+                    disabled={loadingRepositories}
+                    onClick={() =>
+                      void handleBrowseRepositories()
+                    }
+                  >
+                    {loadingRepositories
+                      ? "Refreshing..."
+                      : "Refresh"}
+                  </button>
+                </div>
+
+                <label className="mc-github-repository-search">
+                  <Search size={14} />
+
+                  <input
+                    autoFocus
+                    value={repositorySearch}
+                    placeholder="Search repositories..."
+                    onChange={(event) =>
+                      setRepositorySearch(
+                        event.target.value
+                      )
+                    }
+                  />
+                </label>
+
+                <div className="mc-github-repository-list">
+                  {loadingRepositories &&
+                  !repositoriesLoaded ? (
+                    <p className="mc-muted mc-github-list-message">
+                      Loading repositories…
+                    </p>
+                  ) : filteredRepositories.length ? (
+                    filteredRepositories.map(
+                      (item) => (
+                        <button
+                          key={item.fullName}
+                          className={
+                            repository?.fullName ===
+                            item.fullName
+                              ? "is-selected"
+                              : ""
+                          }
+                          type="button"
+                          onClick={() =>
+                            selectRepository(item)
+                          }
+                        >
+                          <span>
+                            <strong>
+                              {item.fullName}
+                            </strong>
+
+                            <small>
+                              {item.description ||
+                                "No repository description."}
+                            </small>
+                          </span>
+
+                          <span className="mc-github-repository-visibility">
+                            {item.isPrivate ? (
+                              <Lock size={12} />
+                            ) : (
+                              <Unlock size={12} />
+                            )}
+
+                            {item.isPrivate
+                              ? "Private"
+                              : "Public"}
+                          </span>
+                        </button>
+                      )
+                    )
+                  ) : (
+                    <p className="mc-muted mc-github-list-message">
+                      {repositorySearch
+                        ? "No repositories match this search."
+                        : "No authorized repositories were found."}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className="mc-form-hint">
+              Connect GitHub in Settings → Integrations
+              to browse authorized repositories.
+            </p>
+          )}
+
+          <div className="mc-github-manual-import">
+            <button
+              className="mc-github-secondary-toggle"
+              type="button"
+              onClick={() =>
+                setManualUrlOpen(
+                  (open) => !open
+                )
+              }
+            >
+              <Github size={14} />
+
+              <span>
+                Import by URL
+              </span>
+
+              <small>
+                Secondary option
+              </small>
+            </button>
+
+            {manualUrlOpen ? (
+              <label className="mc-field">
+                <span>
+                  GitHub repository URL
+                </span>
+
+                <input
+                  value={repoUrl}
+                  placeholder="https://github.com/owner/repository"
+                  onChange={(event) => {
+                    urlRequestId.current += 1;
+                    setRepoUrl(
+                      event.target.value
+                    );
+                    setRepository(null);
+                    setError(null);
+                  }}
+                />
+
+                <small className="mc-field-help">
+                  Paste a valid GitHub repository URL.
+                  Mission Control loads it automatically.
+                  {loadingRepository
+                    ? " Loading…"
+                    : ""}
+                </small>
+              </label>
+            ) : null}
+          </div>
 
           {repository ? (
             <div className="mc-github-preview">
@@ -512,12 +836,6 @@ export function GitHubImportForm({
               </dl>
             </div>
           ) : null}
-
-          <p className="mc-form-hint">
-            GitHub sign-in and private repository
-            access will be added in the next
-            integration step.
-          </p>
         </div>
       </section>
 

@@ -18,6 +18,7 @@ import {
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { moduleRegistry } from "../modules/registry";
+import { preloadGitHubAccount } from "../../modules/github/githubAccountStore";
 import {
   eventMatchesShortcut,
   useUiPreferences
@@ -61,6 +62,11 @@ export function AppShell({ children }: AppShellProps) {
 
   const menuRef = useRef<HTMLDivElement | null>(null);
   const appWindow = getCurrentWindow();
+
+  useEffect(() => {
+    void preloadGitHubAccount(true)
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     const query = window.matchMedia(MOBILE_QUERY);
@@ -514,7 +520,7 @@ export function AppShell({ children }: AppShellProps) {
               Mission Control
             </span>
             <span className="mc-brand-version">
-              v0.1.3
+              v0.1.4
             </span>
           </div>
         </div>
