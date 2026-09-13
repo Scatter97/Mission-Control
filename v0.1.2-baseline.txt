@@ -1,0 +1,1910 @@
+MISSION CONTROL v0.1.2 BASELINE
+================================
+
+GIT STATUS
+--------------------------------
+?? .patchforge/checkpoints/20260913T004913Z-dce59749/
+?? mission-control-v0.1.1-build-fix.json
+
+
+LATEST COMMIT
+--------------------------------
+a17d26a Fix v0.1.1 project detail build
+
+
+SOURCE TREE
+--------------------------------
+src\main.tsx
+src\vite-env.d.ts
+src\app\App.tsx
+src\app\modules\registry.ts
+src\app\modules\types.ts
+src\app\shell\AppShell.tsx
+src\app\theme\ThemeProvider.tsx
+src\app\theme\tokens.css
+src\backend\BackendProvider.tsx
+src\backend\localBackend.ts
+src\backend\types.ts
+src\modules\projects\hooks.ts
+src\modules\projects\module.tsx
+src\modules\projects\types.ts
+src\modules\projects\components\ProjectForm.tsx
+src\modules\projects\pages\ProjectDetailPage.tsx
+src\modules\projects\pages\ProjectsPage.tsx
+src\modules\settings\module.tsx
+src\modules\settings\SettingsPage.tsx
+src\styles\globals.css
+
+
+TAURI SOURCE TREE
+--------------------------------
+src-tauri\src\lib.rs
+src-tauri\src\main.rs
+src-tauri\src\projects.rs
+
+
+
+================================
+FILE: package.json
+SHA256: E00A2FFEBD79064A40F57AA5FE731E04F4AD950530E15B6B0875CB050D322D5C
+================================
+{
+  "name": "mission-control",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.0.0",
+    "@tanstack/react-query": "^5.59.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^6.28.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.1"
+  }
+}
+
+================================
+FILE: src\main.tsx
+SHA256: E456A4AEE60F44EAA36E14D9A23897C4B351E2DEDC02F57BB82B0317611E562B
+================================
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { HashRouter } from "react-router-dom";
+
+import { App } from "./app/App";
+import { BackendProvider } from "./backend/BackendProvider";
+import { ThemeProvider } from "./app/theme/ThemeProvider";
+
+import "./app/theme/tokens.css";
+import "./styles/globals.css";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 15_000,
+      retry: 1
+    }
+  }
+});
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <BackendProvider>
+        <ThemeProvider>
+          <HashRouter>
+            <App />
+          </HashRouter>
+        </ThemeProvider>
+      </BackendProvider>
+    </QueryClientProvider>
+  </React.StrictMode>
+);
+
+================================
+FILE: src\app\App.tsx
+SHA256: C76097E615C9E91A5319254ACDF09125026BC3CCE45AE36B5F8CE895C38F75C4
+================================
+import { Navigate, Route, Routes } from "react-router-dom";
+
+import { AppShell } from "./shell/AppShell";
+import { moduleRegistry } from "./modules/registry";
+
+export function App() {
+  const routes = moduleRegistry.getRoutes();
+
+  return (
+    <AppShell>
+      <Routes>
+        <Route path="/" element={<Navigate to="/projects" replace />} />
+
+        {routes.map((route) => {
+          const Component = route.component;
+
+          return (
+            <Route
+              key={route.path}
+              path={route.path}
+              element={<Component />}
+            />
+          );
+        })}
+
+        <Route path="*" element={<Navigate to="/projects" replace />} />
+      </Routes>
+    </AppShell>
+  );
+}
+
+================================
+FILE: src\app\modules\types.ts
+SHA256: 72EB123E6A7A88B5242BEBE626E070282BBA8475B31647ED8BF32E3EBC0183C5
+================================
+import type { ComponentType } from "react";
+import type { LucideIcon } from "lucide-react";
+
+export interface ModuleRoute {
+  path: string;
+  component: ComponentType;
+}
+
+export interface NavigationItem {
+  id: string;
+  label: string;
+  route: string;
+  icon: LucideIcon;
+  order?: number;
+}
+
+export interface MissionControlModule {
+  id: string;
+  name: string;
+  routes?: ModuleRoute[];
+  navigation?: NavigationItem[];
+}
+
+================================
+FILE: src\app\modules\registry.ts
+SHA256: A747DEF99D1F1D41A085CE14EF38D790A35A3DC09AB4F084AF4896D833D9CBA3
+================================
+import type {
+  MissionControlModule,
+  ModuleRoute,
+  NavigationItem
+} from "./types";
+
+import { projectsModule } from "../../modules/projects/module";
+import { settingsModule } from "../../modules/settings/module";
+
+class ModuleRegistry {
+  private readonly modules = new Map<string, MissionControlModule>();
+
+  register(module: MissionControlModule) {
+    if (this.modules.has(module.id)) {
+      throw new Error(`Mission Control module already registered: ${module.id}`);
+    }
+
+    this.modules.set(module.id, module);
+  }
+
+  getModules(): MissionControlModule[] {
+    return [...this.modules.values()];
+  }
+
+  getRoutes(): ModuleRoute[] {
+    return this.getModules().flatMap((module) => module.routes ?? []);
+  }
+
+  getNavigationItems(): NavigationItem[] {
+    return this.getModules()
+      .flatMap((module) => module.navigation ?? [])
+      .sort((a, b) => (a.order ?? 100) - (b.order ?? 100));
+  }
+}
+
+export const moduleRegistry = new ModuleRegistry();
+
+moduleRegistry.register(projectsModule);
+moduleRegistry.register(settingsModule);
+
+================================
+FILE: src\backend\types.ts
+SHA256: C2728CEDC4C04232B4628654F1B872E7BC0F212BD70567724EB451D2F5484906
+================================
+import type { Project, ProjectInput } from "../modules/projects/types";
+
+export interface BackendCapabilities {
+  projects: boolean;
+  settings: boolean;
+
+  patchForge: boolean;
+  git: boolean;
+  terminal: boolean;
+  ai: boolean;
+  remote: boolean;
+  bom: boolean;
+}
+
+export interface MissionControlBackend {
+  capabilities(): Promise<BackendCapabilities>;
+
+  listProjects(): Promise<Project[]>;
+  getProject(id: string): Promise<Project | null>;
+  createProject(input: ProjectInput): Promise<Project>;
+  updateProject(id: string, input: ProjectInput): Promise<Project>;
+  archiveProject(id: string): Promise<void>;
+  deleteProject(id: string): Promise<void>;
+}
+
+export interface BackendError {
+  code: string;
+  message: string;
+  details?: unknown;
+}
+
+================================
+FILE: src\backend\localBackend.ts
+SHA256: AA8CADFC43A3DE41D892EBF437445B450BD2B53516150D3CBD4B4E1225F9A268
+================================
+import { invoke } from "@tauri-apps/api/core";
+
+import type { Project, ProjectInput } from "../modules/projects/types";
+import type {
+  BackendCapabilities,
+  MissionControlBackend
+} from "./types";
+
+export class LocalBackend implements MissionControlBackend {
+  capabilities(): Promise<BackendCapabilities> {
+    return invoke<BackendCapabilities>("backend_capabilities");
+  }
+
+  listProjects(): Promise<Project[]> {
+    return invoke<Project[]>("projects_list");
+  }
+
+  getProject(id: string): Promise<Project | null> {
+    return invoke<Project | null>("projects_get", { id });
+  }
+
+  createProject(input: ProjectInput): Promise<Project> {
+    return invoke<Project>("projects_create", { input });
+  }
+
+  updateProject(id: string, input: ProjectInput): Promise<Project> {
+    return invoke<Project>("projects_update", { id, input });
+  }
+
+  archiveProject(id: string): Promise<void> {
+    return invoke<void>("projects_archive", { id });
+  }
+
+  deleteProject(id: string): Promise<void> {
+    return invoke<void>("projects_delete", { id });
+  }
+}
+
+
+================================
+FILE: src\backend\BackendProvider.tsx
+SHA256: 1D886B2B3826867084DD713E0DB4617A83F829100F648DD863A1576D7309F0FE
+================================
+import {
+  createContext,
+  useContext,
+  useMemo,
+  type ReactNode
+} from "react";
+
+import { LocalBackend } from "./localBackend";
+import type { MissionControlBackend } from "./types";
+
+const BackendContext = createContext<MissionControlBackend | null>(null);
+
+export function BackendProvider({ children }: { children: ReactNode }) {
+  const backend = useMemo(() => new LocalBackend(), []);
+
+  return (
+    <BackendContext.Provider value={backend}>
+      {children}
+    </BackendContext.Provider>
+  );
+}
+
+export function useBackend(): MissionControlBackend {
+  const backend = useContext(BackendContext);
+
+  if (!backend) {
+    throw new Error("useBackend must be used inside BackendProvider");
+  }
+
+  return backend;
+}
+
+================================
+FILE: src\modules\projects\module.tsx
+SHA256: A4FE022413169AEECE7DC489F952D9F3D84D6596CD4DEB8756A9045B0F1775BD
+================================
+import { FolderKanban } from "lucide-react";
+
+import type { MissionControlModule } from "../../app/modules/types";
+import { ProjectDetailPage } from "./pages/ProjectDetailPage";
+import { ProjectsPage } from "./pages/ProjectsPage";
+
+export const projectsModule: MissionControlModule = {
+  id: "projects",
+  name: "Projects",
+
+  navigation: [
+    {
+      id: "projects",
+      label: "Projects",
+      route: "/projects",
+      icon: FolderKanban,
+      order: 10
+    }
+  ],
+
+  routes: [
+    {
+      path: "/projects",
+      component: ProjectsPage
+    },
+    {
+      path: "/projects/:id",
+      component: ProjectDetailPage
+    }
+  ]
+};
+
+================================
+FILE: src\modules\projects\types.ts
+SHA256: CCA04E53EE9B625E7AA03C0CD8462AB3C4A531452EC5D740494201A824DF3BFE
+================================
+export type ProjectStatus =
+  | "active"
+  | "planning"
+  | "paused"
+  | "blocked"
+  | "waiting"
+  | "completed"
+  | "archived";
+
+export type ProjectPriority = "low" | "medium" | "high" | "critical";
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  status: ProjectStatus;
+  priority: ProjectPriority;
+  currentVersion: string;
+  currentPhase: string;
+  currentStep: string;
+  lastCompletedStep: string;
+  nextSteps: string[];
+  blockers: string[];
+  localPath: string | null;
+  repoUrl: string | null;
+  archived: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ProjectInput {
+  name: string;
+  description: string;
+  status: ProjectStatus;
+  priority: ProjectPriority;
+  currentVersion: string;
+  currentPhase: string;
+  currentStep: string;
+  lastCompletedStep: string;
+  nextSteps: string[];
+  blockers: string[];
+  localPath: string | null;
+  repoUrl: string | null;
+}
+
+export const emptyProjectInput: ProjectInput = {
+  name: "",
+  description: "",
+  status: "active",
+  priority: "medium",
+  currentVersion: "",
+  currentPhase: "",
+  currentStep: "",
+  lastCompletedStep: "",
+  nextSteps: [],
+  blockers: [],
+  localPath: null,
+  repoUrl: null
+};
+
+export const PROJECT_STATUSES: ProjectStatus[] = [
+  "active",
+  "planning",
+  "paused",
+  "blocked",
+  "waiting",
+  "completed"
+];
+
+export const PROJECT_PRIORITIES: ProjectPriority[] = [
+  "low",
+  "medium",
+  "high",
+  "critical"
+];
+
+export function projectToInput(project: Project): ProjectInput {
+  return {
+    name: project.name,
+    description: project.description,
+    status: project.status,
+    priority: project.priority,
+    currentVersion: project.currentVersion,
+    currentPhase: project.currentPhase,
+    currentStep: project.currentStep,
+    lastCompletedStep: project.lastCompletedStep,
+    nextSteps: project.nextSteps,
+    blockers: project.blockers,
+    localPath: project.localPath,
+    repoUrl: project.repoUrl
+  };
+}
+
+export function formatProjectStatus(status: ProjectStatus): string {
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+export function formatProjectPriority(priority: ProjectPriority): string {
+  return priority.charAt(0).toUpperCase() + priority.slice(1);
+}
+
+
+================================
+FILE: src\modules\projects\hooks.ts
+SHA256: B6773CEC704288D3737F6E705C31DCDBB617A25C5AFD308AD9DD3A60CC405999
+================================
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
+import { useBackend } from "../../backend/BackendProvider";
+import type { ProjectInput } from "./types";
+
+const projectKeys = {
+  all: ["projects"] as const,
+  detail: (id: string) => ["projects", id] as const
+};
+
+export function useProjects() {
+  const backend = useBackend();
+
+  return useQuery({
+    queryKey: projectKeys.all,
+    queryFn: () => backend.listProjects()
+  });
+}
+
+export function useProject(id: string | undefined) {
+  const backend = useBackend();
+
+  return useQuery({
+    queryKey: projectKeys.detail(id ?? ""),
+    queryFn: () => backend.getProject(id!),
+    enabled: Boolean(id)
+  });
+}
+
+export function useCreateProject() {
+  const backend = useBackend();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: ProjectInput) => backend.createProject(input),
+    onSuccess: (project) => {
+      queryClient.setQueryData(projectKeys.detail(project.id), project);
+      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
+    }
+  });
+}
+
+export function useUpdateProject() {
+  const backend = useBackend();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: ProjectInput }) =>
+      backend.updateProject(id, input),
+    onSuccess: (project) => {
+      queryClient.setQueryData(projectKeys.detail(project.id), project);
+      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
+    }
+  });
+}
+
+export function useArchiveProject() {
+  const backend = useBackend();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => backend.archiveProject(id),
+    onSuccess: (_, id) => {
+      queryClient.removeQueries({ queryKey: projectKeys.detail(id) });
+      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
+    }
+  });
+}
+
+export function useDeleteProject() {
+  const backend = useBackend();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => backend.deleteProject(id),
+    onSuccess: (_, id) => {
+      queryClient.removeQueries({ queryKey: projectKeys.detail(id) });
+      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
+    }
+  });
+}
+
+
+================================
+FILE: src\modules\projects\components\ProjectForm.tsx
+SHA256: EBCA7DD3C1AB9926CBD95FDB131F93C51BE96E2103190EEB363AD5A7446C256D
+================================
+import { useState, type FormEvent } from "react";
+import { X } from "lucide-react";
+
+import {
+  PROJECT_PRIORITIES,
+  PROJECT_STATUSES,
+  emptyProjectInput,
+  formatProjectPriority,
+  formatProjectStatus,
+  type ProjectInput
+} from "../types";
+
+interface ProjectFormProps {
+  title: string;
+  initialValue?: ProjectInput;
+  submitLabel: string;
+  busy?: boolean;
+  onCancel: () => void;
+  onSubmit: (input: ProjectInput) => Promise<void> | void;
+}
+
+function linesToItems(value: string): string[] {
+  return value
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+export function ProjectForm({
+  title,
+  initialValue = emptyProjectInput,
+  submitLabel,
+  busy = false,
+  onCancel,
+  onSubmit
+}: ProjectFormProps) {
+  const [value, setValue] = useState<ProjectInput>(initialValue);
+  const [nextSteps, setNextSteps] = useState(initialValue.nextSteps.join("\n"));
+  const [blockers, setBlockers] = useState(initialValue.blockers.join("\n"));
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!value.name.trim()) {
+      setError("Project name is required.");
+      return;
+    }
+
+    setError(null);
+
+    try {
+      await onSubmit({
+        ...value,
+        name: value.name.trim(),
+        description: value.description.trim(),
+        currentVersion: value.currentVersion.trim(),
+        currentPhase: value.currentPhase.trim(),
+        currentStep: value.currentStep.trim(),
+        lastCompletedStep: value.lastCompletedStep.trim(),
+        nextSteps: linesToItems(nextSteps),
+        blockers: linesToItems(blockers),
+        localPath: value.localPath?.trim() || null,
+        repoUrl: value.repoUrl?.trim() || null
+      });
+    } catch (submitError) {
+      setError(String(submitError));
+    }
+  }
+
+  return (
+    <div className="mc-modal-backdrop">
+      <div className="mc-modal" role="dialog" aria-modal="true">
+        <div className="mc-modal-header">
+          <div>
+            <p className="mc-eyebrow">Project</p>
+            <h2>{title}</h2>
+          </div>
+
+          <button className="mc-icon-button" type="button" onClick={onCancel}>
+            <X size={16} />
+          </button>
+        </div>
+
+        <form className="mc-project-form" onSubmit={handleSubmit}>
+          <label className="mc-field mc-field-wide">
+            <span>Name</span>
+            <input
+              autoFocus
+              value={value.name}
+              onChange={(event) =>
+                setValue((current) => ({ ...current, name: event.target.value }))
+              }
+            />
+          </label>
+
+          <label className="mc-field mc-field-wide">
+            <span>Description</span>
+            <textarea
+              rows={3}
+              value={value.description}
+              onChange={(event) =>
+                setValue((current) => ({ ...current, description: event.target.value }))
+              }
+            />
+          </label>
+
+          <label className="mc-field">
+            <span>Status</span>
+            <select
+              value={value.status}
+              onChange={(event) =>
+                setValue((current) => ({
+                  ...current,
+                  status: event.target.value as ProjectInput["status"]
+                }))
+              }
+            >
+              {PROJECT_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {formatProjectStatus(status)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="mc-field">
+            <span>Priority</span>
+            <select
+              value={value.priority}
+              onChange={(event) =>
+                setValue((current) => ({
+                  ...current,
+                  priority: event.target.value as ProjectInput["priority"]
+                }))
+              }
+            >
+              {PROJECT_PRIORITIES.map((priority) => (
+                <option key={priority} value={priority}>
+                  {formatProjectPriority(priority)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="mc-field">
+            <span>Current version</span>
+            <input
+              value={value.currentVersion}
+              onChange={(event) =>
+                setValue((current) => ({ ...current, currentVersion: event.target.value }))
+              }
+            />
+          </label>
+
+          <label className="mc-field">
+            <span>Current phase</span>
+            <input
+              value={value.currentPhase}
+              onChange={(event) =>
+                setValue((current) => ({ ...current, currentPhase: event.target.value }))
+              }
+            />
+          </label>
+
+          <label className="mc-field mc-field-wide">
+            <span>Current Step</span>
+            <input
+              value={value.currentStep}
+              onChange={(event) =>
+                setValue((current) => ({ ...current, currentStep: event.target.value }))
+              }
+            />
+          </label>
+
+          <label className="mc-field mc-field-wide">
+            <span>Last completed step</span>
+            <input
+              value={value.lastCompletedStep}
+              onChange={(event) =>
+                setValue((current) => ({ ...current, lastCompletedStep: event.target.value }))
+              }
+            />
+          </label>
+
+          <label className="mc-field mc-field-wide">
+            <span>Next steps</span>
+            <textarea
+              rows={4}
+              value={nextSteps}
+              onChange={(event) => setNextSteps(event.target.value)}
+              placeholder="One step per line"
+            />
+          </label>
+
+          <label className="mc-field mc-field-wide">
+            <span>Blockers</span>
+            <textarea
+              rows={3}
+              value={blockers}
+              onChange={(event) => setBlockers(event.target.value)}
+              placeholder="One blocker per line"
+            />
+          </label>
+
+          <label className="mc-field">
+            <span>Local path</span>
+            <input
+              value={value.localPath ?? ""}
+              onChange={(event) =>
+                setValue((current) => ({ ...current, localPath: event.target.value }))
+              }
+            />
+          </label>
+
+          <label className="mc-field">
+            <span>Repository URL</span>
+            <input
+              value={value.repoUrl ?? ""}
+              onChange={(event) =>
+                setValue((current) => ({ ...current, repoUrl: event.target.value }))
+              }
+            />
+          </label>
+
+          {error ? <p className="mc-form-error">{error}</p> : null}
+
+          <div className="mc-modal-actions">
+            <button className="mc-button" type="button" onClick={onCancel}>
+              Cancel
+            </button>
+            <button className="mc-button mc-button-primary" type="submit" disabled={busy}>
+              {busy ? "Saving..." : submitLabel}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+
+================================
+FILE: src\modules\projects\pages\ProjectsPage.tsx
+SHA256: 606B3AE0AE7B11F40F83692AAD5B1F5E1BBB04BDE1FC29879574082CA4995AC1
+================================
+import { useMemo, useState } from "react";
+import { FolderKanban, Plus, Search } from "lucide-react";
+import { Link } from "react-router-dom";
+
+import { ProjectForm } from "../components/ProjectForm";
+import { useCreateProject, useProjects } from "../hooks";
+import { formatProjectPriority, formatProjectStatus, type Project } from "../types";
+
+function matchesSearch(project: Project, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+
+  return [
+    project.name,
+    project.description,
+    project.currentVersion,
+    project.currentPhase,
+    project.currentStep
+  ].some((value) => value.toLowerCase().includes(needle));
+}
+
+export function ProjectsPage() {
+  const projectsQuery = useProjects();
+  const createProject = useCreateProject();
+  const [query, setQuery] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  const projects = useMemo(
+    () => (projectsQuery.data ?? []).filter((project) => matchesSearch(project, query)),
+    [projectsQuery.data, query]
+  );
+
+  return (
+    <section className="mc-page">
+      <header className="mc-page-header">
+        <div>
+          <p className="mc-eyebrow">Workspace</p>
+          <h1>Projects</h1>
+          <p className="mc-page-description">
+            Track the current state and next action for every project.
+          </p>
+        </div>
+
+        <button className="mc-button mc-button-primary" type="button" onClick={() => setCreating(true)}>
+          <Plus size={15} />
+          New project
+        </button>
+      </header>
+
+      <div className="mc-toolbar">
+        <label className="mc-search">
+          <Search size={15} />
+          <input
+            aria-label="Search projects"
+            placeholder="Search projects..."
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+      </div>
+
+      {projectsQuery.isLoading ? (
+        <div className="mc-panel mc-project-empty"><p>Loading projects...</p></div>
+      ) : projectsQuery.isError ? (
+        <div className="mc-panel mc-project-empty">
+          <h2>Could not load projects</h2>
+          <p>{String(projectsQuery.error)}</p>
+        </div>
+      ) : projects.length ? (
+        <div className="mc-panel mc-project-table">
+          {projects.map((project) => (
+            <Link className="mc-project-row" key={project.id} to={`/projects/${project.id}`}>
+              <div>
+                <strong>{project.name}</strong>
+                <small>{project.currentPhase || project.description || "No phase set"}</small>
+              </div>
+              <span>{formatProjectStatus(project.status)}</span>
+              <span>{formatProjectPriority(project.priority)}</span>
+              <span>{project.currentVersion || "â€”"}</span>
+              <span>{project.currentStep || "No current step"}</span>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="mc-panel mc-project-empty">
+          <div className="mc-empty-icon"><FolderKanban size={28} /></div>
+          <h2>{query ? "No matching projects" : "No projects yet"}</h2>
+          <p>{query ? "Try a different search." : "Create your first project to begin tracking it."}</p>
+        </div>
+      )}
+
+      {creating ? (
+        <ProjectForm
+          title="New project"
+          submitLabel="Create project"
+          busy={createProject.isPending}
+          onCancel={() => setCreating(false)}
+          onSubmit={async (input) => {
+            await createProject.mutateAsync(input);
+            setCreating(false);
+          }}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+
+================================
+FILE: src\modules\projects\pages\ProjectDetailPage.tsx
+SHA256: 011233B371048DBEE95587537F6B13EE160BCA90BC617B089B5885E0B3B66C6C
+================================
+import { useState } from "react";
+import { Archive, ArrowLeft, Pencil, Trash2 } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+
+import { ProjectForm } from "../components/ProjectForm";
+import {
+  useArchiveProject,
+  useDeleteProject,
+  useProject,
+  useUpdateProject
+} from "../hooks";
+import {
+  formatProjectPriority,
+  formatProjectStatus,
+  projectToInput
+} from "../types";
+
+export function ProjectDetailPage() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const projectQuery = useProject(id);
+  const updateProject = useUpdateProject();
+  const archiveProject = useArchiveProject();
+  const deleteProject = useDeleteProject();
+  const [editing, setEditing] = useState(false);
+
+  if (projectQuery.isLoading) {
+    return <section className="mc-page"><div className="mc-panel mc-project-empty"><p>Loading project...</p></div></section>;
+  }
+
+  const project = projectQuery.data;
+
+  if (!project) {
+    return <section className="mc-page"><div className="mc-panel mc-project-empty"><h2>Project not found</h2></div></section>;
+  }
+
+  async function handleArchive() {
+    if (!project) return;
+    if (!window.confirm(`Archive "${project.name}"?`)) return;
+    await archiveProject.mutateAsync(project.id);
+    navigate("/projects");
+  }
+
+  async function handleDelete() {
+    if (!project) return;
+    if (!window.confirm(`Permanently delete "${project.name}"?`)) return;
+    await deleteProject.mutateAsync(project.id);
+    navigate("/projects");
+  }
+
+  return (
+    <section className="mc-page">
+      <Link className="mc-back-link" to="/projects">
+        <ArrowLeft size={14} /> Projects
+      </Link>
+
+      <header className="mc-page-header">
+        <div>
+          <p className="mc-eyebrow">Project overview</p>
+          <h1>{project.name}</h1>
+          <p className="mc-page-description">{project.description || "No description yet."}</p>
+        </div>
+
+        <div className="mc-header-actions">
+          <button className="mc-button" onClick={() => setEditing(true)}>
+            <Pencil size={14} /> Edit
+          </button>
+          <button className="mc-button" onClick={handleArchive}>
+            <Archive size={14} /> Archive
+          </button>
+          <button className="mc-button mc-button-danger" onClick={handleDelete}>
+            <Trash2 size={14} /> Delete
+          </button>
+        </div>
+      </header>
+
+      <div className="mc-project-detail-grid">
+        <div className="mc-project-detail-main">
+          <section className="mc-panel mc-current-step-panel">
+            <p className="mc-eyebrow">Current Step</p>
+            <h2>{project.currentStep || "No current step set"}</h2>
+            <p>{project.currentPhase || "No phase"} Â· {project.currentVersion || "No version"}</p>
+          </section>
+
+          <section className="mc-panel mc-detail-section">
+            <h2>Next steps</h2>
+            {project.nextSteps.length ? (
+              <ol className="mc-detail-list">
+                {project.nextSteps.map((step) => <li key={step}>{step}</li>)}
+              </ol>
+            ) : <p className="mc-muted">No next steps yet.</p>}
+          </section>
+
+          <section className="mc-panel mc-detail-section">
+            <h2>Blockers</h2>
+            {project.blockers.length ? (
+              <ul className="mc-detail-list">
+                {project.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}
+              </ul>
+            ) : <p className="mc-muted">No blockers.</p>}
+          </section>
+        </div>
+
+        <aside className="mc-panel mc-project-inspector">
+          <h2>Project details</h2>
+          <p>Status: {formatProjectStatus(project.status)}</p>
+          <p>Priority: {formatProjectPriority(project.priority)}</p>
+          <p>Version: {project.currentVersion || "â€”"}</p>
+          <p>Phase: {project.currentPhase || "â€”"}</p>
+          <p>Last completed: {project.lastCompletedStep || "â€”"}</p>
+          <p>Local path: {project.localPath || "â€”"}</p>
+          <p>Repository: {project.repoUrl || "â€”"}</p>
+        </aside>
+      </div>
+
+      {editing ? (
+        <ProjectForm
+          title={`Edit ${project.name}`}
+          initialValue={projectToInput(project)}
+          submitLabel="Save changes"
+          busy={updateProject.isPending}
+          onCancel={() => setEditing(false)}
+          onSubmit={async (input) => {
+            await updateProject.mutateAsync({ id: project.id, input });
+            setEditing(false);
+          }}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+
+================================
+FILE: src\styles\globals.css
+SHA256: B8025E42B25055FBB68EBC6B155B3DD4FBF5B8DE6142B3B1CA1421738813121A
+================================
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  overflow: hidden;
+  background: var(--mc-bg);
+  color: var(--mc-text-primary);
+  font-family:
+    Inter,
+    ui-sans-serif,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  font-size: 14px;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+.mc-shell {
+  display: grid;
+  grid-template-columns: var(--mc-sidebar-width) minmax(0, 1fr);
+  width: 100vw;
+  height: 100vh;
+  background: var(--mc-bg);
+}
+
+.mc-sidebar {
+  display: flex;
+  flex-direction: column;
+  padding: 16px 12px;
+  border-right: 1px solid var(--mc-border-subtle);
+  background: var(--mc-sidebar);
+}
+
+.mc-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 8px;
+  margin-bottom: 18px;
+}
+
+.mc-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius-md);
+  background: var(--mc-surface-raised);
+  color: var(--mc-accent);
+}
+
+.mc-brand-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mc-brand-title {
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.mc-brand-version {
+  margin-top: 2px;
+  color: var(--mc-text-muted);
+  font-size: 10px;
+}
+
+.mc-nav {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mc-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--mc-radius-sm);
+  color: var(--mc-text-secondary);
+  text-decoration: none;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.mc-nav-item:hover {
+  background: var(--mc-surface-hover);
+  color: var(--mc-text-primary);
+}
+
+.mc-nav-item.is-active {
+  background: var(--mc-accent-soft);
+  color: var(--mc-text-primary);
+}
+
+.mc-nav-item.is-active svg {
+  color: var(--mc-accent);
+}
+
+.mc-main {
+  min-width: 0;
+  overflow: auto;
+}
+
+.mc-page {
+  width: min(1180px, calc(100% - 64px));
+  margin: 0 auto;
+  padding: 42px 0 80px;
+}
+
+.mc-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 30px;
+}
+
+.mc-eyebrow {
+  margin: 0 0 8px;
+  color: var(--mc-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mc-page-header h1 {
+  margin: 0;
+  font-size: 25px;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+
+.mc-page-description {
+  max-width: 560px;
+  margin: 8px 0 0;
+  color: var(--mc-text-secondary);
+  line-height: 1.55;
+}
+
+.mc-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius-sm);
+  background: var(--mc-surface-raised);
+  cursor: pointer;
+}
+
+.mc-button-primary {
+  border-color: transparent;
+  background: var(--mc-accent);
+  color: white;
+}
+
+.mc-toolbar {
+  display: flex;
+  margin-bottom: 14px;
+}
+
+.mc-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 320px;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius-sm);
+  background: var(--mc-surface);
+  color: var(--mc-text-muted);
+}
+
+.mc-search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--mc-text-primary);
+}
+
+.mc-panel {
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius-md);
+  background: var(--mc-surface);
+}
+
+.mc-project-empty {
+  display: flex;
+  min-height: 360px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  text-align: center;
+}
+
+.mc-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 18px;
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius-lg);
+  background: var(--mc-surface-raised);
+  color: var(--mc-text-muted);
+}
+
+.mc-project-empty h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 620;
+}
+
+.mc-project-empty p {
+  max-width: 450px;
+  margin: 8px 0 0;
+  color: var(--mc-text-secondary);
+  line-height: 1.55;
+}
+
+.mc-settings-section {
+  max-width: 760px;
+}
+
+.mc-section-heading {
+  margin-bottom: 16px;
+}
+
+.mc-section-heading h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.mc-section-heading p {
+  margin: 5px 0 0;
+  color: var(--mc-text-secondary);
+  font-size: 13px;
+}
+
+.mc-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mc-theme-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 92px;
+  padding: 15px;
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius-md);
+  background: var(--mc-surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.mc-theme-choice:hover {
+  background: var(--mc-surface-hover);
+}
+
+.mc-theme-choice.is-selected {
+  border-color: var(--mc-accent);
+  box-shadow: inset 0 0 0 1px var(--mc-accent);
+}
+
+.mc-theme-choice svg {
+  margin-top: 1px;
+  color: var(--mc-text-secondary);
+}
+
+.mc-theme-choice.is-selected svg {
+  color: var(--mc-accent);
+}
+
+.mc-theme-choice span {
+  display: flex;
+  flex-direction: column;
+}
+
+.mc-theme-choice strong {
+  font-size: 13px;
+  font-weight: 620;
+}
+
+.mc-theme-choice small {
+  margin-top: 5px;
+  color: var(--mc-text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.mc-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.mc-button-danger {
+  color: #ef7777;
+}
+
+.mc-project-table {
+  overflow: hidden;
+}
+
+.mc-project-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 1.5fr) 100px 90px 90px minmax(180px, 1fr);
+  gap: 14px;
+  align-items: center;
+  min-height: 60px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--mc-border-subtle);
+  color: var(--mc-text-secondary);
+  text-decoration: none;
+}
+
+.mc-project-row:hover {
+  background: var(--mc-surface-hover);
+}
+
+.mc-project-row > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.mc-project-row strong {
+  color: var(--mc-text-primary);
+}
+
+.mc-project-row small {
+  margin-top: 4px;
+  color: var(--mc-text-muted);
+}
+
+.mc-project-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
+}
+
+.mc-project-detail-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mc-current-step-panel,
+.mc-detail-section,
+.mc-project-inspector {
+  padding: 20px;
+}
+
+.mc-current-step-panel h2,
+.mc-detail-section h2,
+.mc-project-inspector h2 {
+  margin-top: 0;
+}
+
+.mc-detail-list {
+  color: var(--mc-text-secondary);
+  line-height: 1.6;
+}
+
+.mc-muted {
+  color: var(--mc-text-muted);
+}
+
+.mc-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 20px;
+  color: var(--mc-text-secondary);
+  text-decoration: none;
+}
+
+.mc-modal-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 60%);
+}
+
+.mc-modal {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius-lg);
+  background: var(--mc-surface);
+}
+
+.mc-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 20px;
+  border-bottom: 1px solid var(--mc-border);
+}
+
+.mc-modal-header h2 {
+  margin: 0;
+}
+
+.mc-icon-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius-sm);
+  background: var(--mc-surface-raised);
+  cursor: pointer;
+}
+
+.mc-project-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 20px;
+}
+
+.mc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mc-field-wide {
+  grid-column: 1 / -1;
+}
+
+.mc-field span {
+  color: var(--mc-text-secondary);
+  font-size: 11px;
+}
+
+.mc-field input,
+.mc-field textarea,
+.mc-field select {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius-sm);
+  background: var(--mc-surface-raised);
+  color: var(--mc-text-primary);
+  font: inherit;
+}
+
+.mc-form-error {
+  grid-column: 1 / -1;
+  color: #ef7777;
+}
+
+.mc-modal-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 1100px) {
+  .mc-project-row {
+    grid-template-columns: minmax(200px, 1fr) 100px minmax(160px, 1fr);
+  }
+
+  .mc-project-row > :nth-child(3),
+  .mc-project-row > :nth-child(4) {
+    display: none;
+  }
+
+  .mc-project-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  :root,
+  :root[data-theme="dark"],
+  :root[data-theme="light"] {
+    --mc-sidebar-width: 190px;
+  }
+
+  .mc-page {
+    width: calc(100% - 40px);
+  }
+
+  .mc-theme-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+================================
+FILE: src-tauri\Cargo.toml
+SHA256: CEB29529439F67069E3FFA15DB5B690B5AA4A08AC74333DD9497EF22CE6641C4
+================================
+[package]
+name = "mission-control"
+version = "0.1.0"
+description = "Mission Control development workflow application"
+authors = ["Mission Control"]
+edition = "2021"
+
+[lib]
+name = "mission_control_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+uuid = { version = "1", features = ["v4"] }
+tauri = { version = "2", features = [] }
+
+
+================================
+FILE: src-tauri\src\lib.rs
+SHA256: 98BF3B1D0A6C8485D5FB57AA2B1C7F142261E7EB69287AF4179CF2A6C99C296E
+================================
+mod projects;
+
+use serde::Serialize;
+use tauri::Manager;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackendCapabilities {
+    projects: bool,
+    settings: bool,
+    patch_forge: bool,
+    git: bool,
+    terminal: bool,
+    ai: bool,
+    remote: bool,
+    bom: bool,
+}
+
+#[tauri::command]
+fn backend_capabilities() -> BackendCapabilities {
+    BackendCapabilities {
+        projects: true,
+        settings: true,
+        patch_forge: false,
+        git: false,
+        terminal: false,
+        ai: false,
+        remote: false,
+        bom: false,
+    }
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .setup(|app| {
+            let data_dir = app.path().app_data_dir()?;
+            let database_path = data_dir.join("mission-control.sqlite3");
+            let store = projects::ProjectStore::open(&database_path)?;
+            app.manage(store);
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            backend_capabilities,
+            projects::projects_list,
+            projects::projects_get,
+            projects::projects_create,
+            projects::projects_update,
+            projects::projects_archive,
+            projects::projects_delete
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running Mission Control");
+}
+
+================================
+FILE: src-tauri\src\projects.rs
+SHA256: 2283FB4C613CE816B03F03B02C93533B8149A07355034B5AD49D40CC3CB9C796
+================================
+use rusqlite::{params, Connection, OptionalExtension, Row};
+use serde::{Deserialize, Serialize};
+use std::{fs, path::Path, sync::Mutex, time::{SystemTime, UNIX_EPOCH}};
+use tauri::State;
+use uuid::Uuid;
+
+pub struct ProjectStore {
+    connection: Mutex<Connection>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Project {
+    id: String,
+    name: String,
+    description: String,
+    status: String,
+    priority: String,
+    current_version: String,
+    current_phase: String,
+    current_step: String,
+    last_completed_step: String,
+    next_steps: Vec<String>,
+    blockers: Vec<String>,
+    local_path: Option<String>,
+    repo_url: Option<String>,
+    archived: bool,
+    created_at: i64,
+    updated_at: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectInput {
+    name: String,
+    description: String,
+    status: String,
+    priority: String,
+    current_version: String,
+    current_phase: String,
+    current_step: String,
+    last_completed_step: String,
+    next_steps: Vec<String>,
+    blockers: Vec<String>,
+    local_path: Option<String>,
+    repo_url: Option<String>,
+}
+
+impl ProjectStore {
+    pub fn open(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let connection = Connection::open(path)?;
+        connection.execute_batch(r#"
+            PRAGMA journal_mode = WAL;
+            CREATE TABLE IF NOT EXISTS projects (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL,
+                priority TEXT NOT NULL,
+                current_version TEXT NOT NULL DEFAULT '',
+                current_phase TEXT NOT NULL DEFAULT '',
+                current_step TEXT NOT NULL DEFAULT '',
+                last_completed_step TEXT NOT NULL DEFAULT '',
+                next_steps_json TEXT NOT NULL DEFAULT '[]',
+                blockers_json TEXT NOT NULL DEFAULT '[]',
+                local_path TEXT,
+                repo_url TEXT,
+                archived INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+        "#)?;
+
+        Ok(Self { connection: Mutex::new(connection) })
+    }
+}
+
+fn now() -> i64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as i64
+}
+
+fn row_to_project(row: &Row<'_>) -> rusqlite::Result<Project> {
+    let next_steps: String = row.get("next_steps_json")?;
+    let blockers: String = row.get("blockers_json")?;
+
+    Ok(Project {
+        id: row.get("id")?,
+        name: row.get("name")?,
+        description: row.get("description")?,
+        status: row.get("status")?,
+        priority: row.get("priority")?,
+        current_version: row.get("current_version")?,
+        current_phase: row.get("current_phase")?,
+        current_step: row.get("current_step")?,
+        last_completed_step: row.get("last_completed_step")?,
+        next_steps: serde_json::from_str(&next_steps).unwrap_or_default(),
+        blockers: serde_json::from_str(&blockers).unwrap_or_default(),
+        local_path: row.get("local_path")?,
+        repo_url: row.get("repo_url")?,
+        archived: row.get::<_, i64>("archived")? != 0,
+        created_at: row.get("created_at")?,
+        updated_at: row.get("updated_at")?,
+    })
+}
+
+fn get(connection: &Connection, id: &str) -> Result<Option<Project>, String> {
+    connection.query_row("SELECT * FROM projects WHERE id = ?1", [id], row_to_project)
+        .optional().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn projects_list(store: State<'_, ProjectStore>) -> Result<Vec<Project>, String> {
+    let connection = store.connection.lock().map_err(|_| "Database lock failed".to_string())?;
+    let mut statement = connection.prepare("SELECT * FROM projects WHERE archived = 0 ORDER BY updated_at DESC")
+        .map_err(|error| error.to_string())?;
+    let rows = statement.query_map([], row_to_project).map_err(|error| error.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn projects_get(id: String, store: State<'_, ProjectStore>) -> Result<Option<Project>, String> {
+    let connection = store.connection.lock().map_err(|_| "Database lock failed".to_string())?;
+    get(&connection, &id)
+}
+
+#[tauri::command]
+pub fn projects_create(input: ProjectInput, store: State<'_, ProjectStore>) -> Result<Project, String> {
+    if input.name.trim().is_empty() { return Err("Project name is required".into()); }
+
+    let id = Uuid::new_v4().to_string();
+    let timestamp = now();
+    let next_steps = serde_json::to_string(&input.next_steps).map_err(|e| e.to_string())?;
+    let blockers = serde_json::to_string(&input.blockers).map_err(|e| e.to_string())?;
+    let connection = store.connection.lock().map_err(|_| "Database lock failed".to_string())?;
+
+    connection.execute(
+        "INSERT INTO projects VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,0,?14,?15)",
+        params![id, input.name.trim(), input.description, input.status, input.priority,
+            input.current_version, input.current_phase, input.current_step,
+            input.last_completed_step, next_steps, blockers, input.local_path,
+            input.repo_url, timestamp, timestamp]
+    ).map_err(|e| e.to_string())?;
+
+    get(&connection, &id)?.ok_or_else(|| "Project not found after creation".into())
+}
+
+#[tauri::command]
+pub fn projects_update(id: String, input: ProjectInput, store: State<'_, ProjectStore>) -> Result<Project, String> {
+    let next_steps = serde_json::to_string(&input.next_steps).map_err(|e| e.to_string())?;
+    let blockers = serde_json::to_string(&input.blockers).map_err(|e| e.to_string())?;
+    let connection = store.connection.lock().map_err(|_| "Database lock failed".to_string())?;
+
+    connection.execute(
+        "UPDATE projects SET name=?2,description=?3,status=?4,priority=?5,current_version=?6,current_phase=?7,current_step=?8,last_completed_step=?9,next_steps_json=?10,blockers_json=?11,local_path=?12,repo_url=?13,updated_at=?14 WHERE id=?1",
+        params![id, input.name, input.description, input.status, input.priority,
+            input.current_version, input.current_phase, input.current_step,
+            input.last_completed_step, next_steps, blockers, input.local_path,
+            input.repo_url, now()]
+    ).map_err(|e| e.to_string())?;
+
+    get(&connection, &id)?.ok_or_else(|| "Project not found".into())
+}
+
+#[tauri::command]
+pub fn projects_archive(id: String, store: State<'_, ProjectStore>) -> Result<(), String> {
+    let connection = store.connection.lock().map_err(|_| "Database lock failed".to_string())?;
+    connection.execute("UPDATE projects SET archived=1,status='archived',updated_at=?2 WHERE id=?1", params![id, now()])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn projects_delete(id: String, store: State<'_, ProjectStore>) -> Result<(), String> {
+    let connection = store.connection.lock().map_err(|_| "Database lock failed".to_string())?;
+    connection.execute("DELETE FROM projects WHERE id=?1", [id]).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+
+================================
+FILE: src-tauri\tauri.conf.json
+SHA256: E45D9ABC74AB39BD270B2AEBA381F317E45AEDA526BBC54509230EE4B4B6EF89
+================================
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Mission Control",
+  "version": "0.1.0",
+  "identifier": "com.missioncontrol.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Mission Control",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1100,
+        "minHeight": 700,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false
+  }
+}

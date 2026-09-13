@@ -514,7 +514,7 @@ export function AppShell({ children }: AppShellProps) {
               Mission Control
             </span>
             <span className="mc-brand-version">
-              v0.1.2+rev.2
+              v0.1.3
             </span>
           </div>
         </div>

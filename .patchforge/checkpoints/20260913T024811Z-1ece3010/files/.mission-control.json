@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "name": "Mission Control",
+  "version": "0.1.2+rev.2",
+  "status": "active",
+  "currentPhase": "Repository integration",
+  "currentStep": "Add GitHub repository import",
+  "currentStepStatus": "todo",
+  "currentStepPriority": "medium",
+  "lastCompletedStep": "Add native project-folder selection and Patch Forge Mission Control metadata support",
+  "nextSteps": [
+    "Add GitHub repository import",
+    "Sync GitHub repository metadata",
+    "Load project state from .mission-control.json",
+    "Build file-content clipboard helper"
+  ],
+  "blockers": [],
+  "repository": {
+    "provider": "github",
+    "url": "https://github.com/Scatter97/Mission-Control"
+  }
+}

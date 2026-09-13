@@ -496,7 +496,7 @@ export function SettingsPage() {
                 <dl className="mc-about-list">
                   <div>
                     <dt>Version</dt>
-                    <dd>0.1.2+rev.2</dd>
+                    <dd>0.1.3</dd>
                   </div>
 
                   <div>

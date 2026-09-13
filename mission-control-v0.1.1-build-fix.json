@@ -1,0 +1,23 @@
+{
+    "version":  2,
+    "name":  "Mission Control v0.1.1 build fix",
+    "files":  [
+                  {
+                      "path":  "src/modules/projects/pages/ProjectDetailPage.tsx",
+                      "edits":  [
+                                    {
+                                        "op":  "replace",
+                                        "old":  "  async function handleArchive() {\n    if (!window.confirm(`Archive \"${project.name}\"?`)) return;\n    await archiveProject.mutateAsync(project.id);\n    navigate(\"/projects\");\n  }\n\n  async function handleDelete() {\n    if (!window.confirm(`Permanently delete \"${project.name}\"?`)) return;\n    await deleteProject.mutateAsync(project.id);\n    navigate(\"/projects\");\n  }",
+                                        "new":  "  async function handleArchive() {\n    if (!project) return;\n    if (!window.confirm(`Archive \"${project.name}\"?`)) return;\n    await archiveProject.mutateAsync(project.id);\n    navigate(\"/projects\");\n  }\n\n  async function handleDelete() {\n    if (!project) return;\n    if (!window.confirm(`Permanently delete \"${project.name}\"?`)) return;\n    await deleteProject.mutateAsync(project.id);\n    navigate(\"/projects\");\n  }"
+                                    }
+                                ]
+                  }
+              ],
+    "build":  [
+                  "npm run build",
+                  "cargo check --manifest-path src-tauri/Cargo.toml"
+              ],
+    "options":  {
+                    "rollback_on_verify_failure":  true
+                }
+}

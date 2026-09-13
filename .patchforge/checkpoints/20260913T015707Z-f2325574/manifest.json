@@ -1,0 +1,63 @@
+{
+  "version": 2,
+  "checkpoint_id": "20260913T015707Z-f2325574",
+  "created_utc": "2026-09-13T01:57:07.636363+00:00",
+  "label": "Mission Control v0.1.2.1 polish fixes",
+  "repo": "C:\\Users\\joshh\\Desktop\\Mission-Control",
+  "files": [
+    {
+      "path": "package.json",
+      "existed": true,
+      "sha256": "30611fc4cd3cc5a3cc3f474098920383223baf99bc3ae286ca155886e86ebd0c",
+      "patched_sha256": "9048c9b56a4da63d436aa77a028e93c3b8547eb60b18f53c09fb72d5c2838d85"
+    },
+    {
+      "path": "package-lock.json",
+      "existed": true,
+      "sha256": "113e5526e347bff5931bb5446563ed643086a55123df31d5c7e9c52c564e1c8d",
+      "patched_sha256": "c77e53008091ffd99e5692d55bb031fecc76a3a0146cdf324ef5fd281b13b28c"
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "existed": true,
+      "sha256": "723dee3dbc872cd9ba6bb230ab631eac80dc3e81ea529a39d4509e1fa1678b8b",
+      "patched_sha256": "3f8681c7ffd754a7aa8f1ccb9b7337b1f46101b3c058ffe91194c7b5a8897ca9"
+    },
+    {
+      "path": "src-tauri/Cargo.lock",
+      "existed": true,
+      "sha256": "82eb2b7fa9339c484a890cdcf896c46016d9f5cdace6de5ccf9b3e38dbd4d00a",
+      "patched_sha256": "f9a589632c24fc891993abfa430f7abba73e5f247f1cf65bdfa9555efbdecaf5"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "existed": true,
+      "sha256": "8b10269794a54d1e0dcc224bb1fca68f57d3fa27dd8f97b0d4b97adbcae6a0fa",
+      "patched_sha256": "5f249c87e5270f2f206c6ac8ba31a651e0eae70d2db874a7386d7130390caa93"
+    },
+    {
+      "path": "src/app/shell/AppShell.tsx",
+      "existed": true,
+      "sha256": "b796c25a32bb01bd44276f6c3c79dfd8004063bda9bfb420d137c263bfc543ef",
+      "patched_sha256": "b00f68337f3a3795c6f1923dd2037bb262e1103a205dfb218124210286fe172c"
+    },
+    {
+      "path": "src/modules/settings/SettingsPage.tsx",
+      "existed": true,
+      "sha256": "33e8d60065e7f502038977413a4de69172c42843fb38c4c2972667c757b9f747",
+      "patched_sha256": "edf763a438f2c7a8fc2cc300d694d9bd6afd5edfa70f88a262bb6ca8704d29ae"
+    },
+    {
+      "path": "src/styles/globals.css",
+      "existed": true,
+      "sha256": "8729bf05b80ba4d5e953d9de8f7f90c60bb034cd6aa21b5b5afafdd3e85ec370",
+      "patched_sha256": "eaa7ad287dbf7a1684bc4b418dd0aea8f8f14d5e90ba1f54f66e17c5c20a0044"
+    },
+    {
+      "path": "src-tauri/capabilities/default.json",
+      "existed": false,
+      "sha256": null,
+      "patched_sha256": "3f57c2aa2e3d6da8bb5b147274e25a644c5900aeef9965f00b306784c01180ad"
+    }
+  ]
+}

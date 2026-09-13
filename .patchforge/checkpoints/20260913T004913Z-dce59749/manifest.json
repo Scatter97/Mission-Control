@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "checkpoint_id": "20260913T004913Z-dce59749",
+  "created_utc": "2026-09-13T00:49:13.088350+00:00",
+  "label": "Mission Control v0.1.1 build fix",
+  "repo": "C:\\Users\\joshh\\Desktop\\Mission-Control",
+  "files": [
+    {
+      "path": "src/modules/projects/pages/ProjectDetailPage.tsx",
+      "existed": true,
+      "sha256": "4ea04aa07607a926599e500d778fb41d253a755574729b5041c02d3b356c9e31",
+      "patched_sha256": "011233b371048dbee95587537f6b13ee160bca90bc617b089b5885e0b3b66c6c"
+    }
+  ]
+}
