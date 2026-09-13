@@ -4,16 +4,17 @@ import { useBackend } from "../../backend/BackendProvider";
 import type { ProjectInput } from "./types";
 
 const projectKeys = {
-  all: ["projects"] as const,
-  detail: (id: string) => ["projects", id] as const
+  root: ["projects"] as const,
+  list: (archived: boolean) => ["projects", "list", archived] as const,
+  detail: (id: string) => ["projects", "detail", id] as const
 };
 
-export function useProjects() {
+export function useProjects(archived = false) {
   const backend = useBackend();
 
   return useQuery({
-    queryKey: projectKeys.all,
-    queryFn: () => backend.listProjects()
+    queryKey: projectKeys.list(archived),
+    queryFn: () => backend.listProjects(archived)
   });
 }
 
@@ -35,7 +36,7 @@ export function useCreateProject() {
     mutationFn: (input: ProjectInput) => backend.createProject(input),
     onSuccess: (project) => {
       queryClient.setQueryData(projectKeys.detail(project.id), project);
-      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
+      void queryClient.invalidateQueries({ queryKey: projectKeys.root });
     }
   });
 }
@@ -49,7 +50,7 @@ export function useUpdateProject() {
       backend.updateProject(id, input),
     onSuccess: (project) => {
       queryClient.setQueryData(projectKeys.detail(project.id), project);
-      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
+      void queryClient.invalidateQueries({ queryKey: projectKeys.root });
     }
   });
 }
@@ -61,8 +62,21 @@ export function useArchiveProject() {
   return useMutation({
     mutationFn: (id: string) => backend.archiveProject(id),
     onSuccess: (_, id) => {
-      queryClient.removeQueries({ queryKey: projectKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
+      void queryClient.invalidateQueries({ queryKey: projectKeys.root });
+      void queryClient.invalidateQueries({ queryKey: projectKeys.detail(id) });
+    }
+  });
+}
+
+export function useRestoreProject() {
+  const backend = useBackend();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => backend.restoreProject(id),
+    onSuccess: (_, id) => {
+      void queryClient.invalidateQueries({ queryKey: projectKeys.root });
+      void queryClient.invalidateQueries({ queryKey: projectKeys.detail(id) });
     }
   });
 }
@@ -75,7 +89,7 @@ export function useDeleteProject() {
     mutationFn: (id: string) => backend.deleteProject(id),
     onSuccess: (_, id) => {
       queryClient.removeQueries({ queryKey: projectKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
+      void queryClient.invalidateQueries({ queryKey: projectKeys.root });
     }
   });
 }

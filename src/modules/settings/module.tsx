@@ -21,6 +21,10 @@ export const settingsModule: MissionControlModule = {
     {
       path: "/settings",
       component: SettingsPage
+    },
+    {
+      path: "/settings/:section",
+      component: SettingsPage
     }
   ]
 };

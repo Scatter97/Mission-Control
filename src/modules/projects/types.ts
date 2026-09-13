@@ -1,3 +1,5 @@
+import type { SemanticTone } from "../../shared/ui/OptionPicker";
+
 export type ProjectStatus =
   | "active"
   | "planning"
@@ -7,17 +9,25 @@ export type ProjectStatus =
   | "completed"
   | "archived";
 
-export type ProjectPriority = "low" | "medium" | "high" | "critical";
+export type StepStatus =
+  | "todo"
+  | "in_progress"
+  | "blocked"
+  | "waiting"
+  | "done";
+
+export type StepPriority = "low" | "medium" | "high" | "critical";
 
 export interface Project {
   id: string;
   name: string;
   description: string;
   status: ProjectStatus;
-  priority: ProjectPriority;
   currentVersion: string;
   currentPhase: string;
   currentStep: string;
+  currentStepStatus: StepStatus;
+  currentStepPriority: StepPriority;
   lastCompletedStep: string;
   nextSteps: string[];
   blockers: string[];
@@ -32,10 +42,11 @@ export interface ProjectInput {
   name: string;
   description: string;
   status: ProjectStatus;
-  priority: ProjectPriority;
   currentVersion: string;
   currentPhase: string;
   currentStep: string;
+  currentStepStatus: StepStatus;
+  currentStepPriority: StepPriority;
   lastCompletedStep: string;
   nextSteps: string[];
   blockers: string[];
@@ -47,10 +58,11 @@ export const emptyProjectInput: ProjectInput = {
   name: "",
   description: "",
   status: "active",
-  priority: "medium",
   currentVersion: "",
   currentPhase: "",
   currentStep: "",
+  currentStepStatus: "todo",
+  currentStepPriority: "medium",
   lastCompletedStep: "",
   nextSteps: [],
   blockers: [],
@@ -67,7 +79,15 @@ export const PROJECT_STATUSES: ProjectStatus[] = [
   "completed"
 ];
 
-export const PROJECT_PRIORITIES: ProjectPriority[] = [
+export const STEP_STATUSES: StepStatus[] = [
+  "todo",
+  "in_progress",
+  "blocked",
+  "waiting",
+  "done"
+];
+
+export const STEP_PRIORITIES: StepPriority[] = [
   "low",
   "medium",
   "high",
@@ -78,11 +98,12 @@ export function projectToInput(project: Project): ProjectInput {
   return {
     name: project.name,
     description: project.description,
-    status: project.status,
-    priority: project.priority,
+    status: project.status === "archived" ? "paused" : project.status,
     currentVersion: project.currentVersion,
     currentPhase: project.currentPhase,
     currentStep: project.currentStep,
+    currentStepStatus: project.currentStepStatus,
+    currentStepPriority: project.currentStepPriority,
     lastCompletedStep: project.lastCompletedStep,
     nextSteps: project.nextSteps,
     blockers: project.blockers,
@@ -91,10 +112,60 @@ export function projectToInput(project: Project): ProjectInput {
   };
 }
 
-export function formatProjectStatus(status: ProjectStatus): string {
-  return status.charAt(0).toUpperCase() + status.slice(1);
+export function formatLabel(value: string): string {
+  return value
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
-export function formatProjectPriority(priority: ProjectPriority): string {
-  return priority.charAt(0).toUpperCase() + priority.slice(1);
+export function formatProjectStatus(status: ProjectStatus): string {
+  return formatLabel(status);
+}
+
+export function formatStepStatus(status: StepStatus): string {
+  return formatLabel(status);
+}
+
+export function formatStepPriority(priority: StepPriority): string {
+  return formatLabel(priority);
+}
+
+export function projectStatusTone(status: ProjectStatus): SemanticTone {
+  switch (status) {
+    case "active":
+      return "success";
+    case "blocked":
+      return "danger";
+    case "waiting":
+      return "warning";
+    case "planning":
+      return "info";
+    case "completed":
+      return "accent";
+    case "archived":
+    case "paused":
+    default:
+      return "neutral";
+  }
+}
+
+export function stepStatusTone(status: StepStatus): SemanticTone {
+  switch (status) {
+    case "in_progress":
+      return "info";
+    case "blocked":
+      return "danger";
+    case "waiting":
+      return "warning";
+    case "done":
+      return "success";
+    case "todo":
+    default:
+      return "neutral";
+  }
+}
+
+export function priorityTone(priority: StepPriority): SemanticTone {
+  return priority;
 }

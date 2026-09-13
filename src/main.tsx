@@ -5,6 +5,7 @@ import { HashRouter } from "react-router-dom";
 
 import { App } from "./app/App";
 import { BackendProvider } from "./backend/BackendProvider";
+import { UiPreferencesProvider } from "./app/preferences/UiPreferencesProvider";
 import { ThemeProvider } from "./app/theme/ThemeProvider";
 
 import "./app/theme/tokens.css";
@@ -24,9 +25,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <BackendProvider>
         <ThemeProvider>
-          <HashRouter>
-            <App />
-          </HashRouter>
+          <UiPreferencesProvider>
+            <HashRouter>
+              <App />
+            </HashRouter>
+          </UiPreferencesProvider>
         </ThemeProvider>
       </BackendProvider>
     </QueryClientProvider>

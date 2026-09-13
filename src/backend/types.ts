@@ -15,11 +15,12 @@ export interface BackendCapabilities {
 export interface MissionControlBackend {
   capabilities(): Promise<BackendCapabilities>;
 
-  listProjects(): Promise<Project[]>;
+  listProjects(archived?: boolean): Promise<Project[]>;
   getProject(id: string): Promise<Project | null>;
   createProject(input: ProjectInput): Promise<Project>;
   updateProject(id: string, input: ProjectInput): Promise<Project>;
   archiveProject(id: string): Promise<void>;
+  restoreProject(id: string): Promise<void>;
   deleteProject(id: string): Promise<void>;
 }
 

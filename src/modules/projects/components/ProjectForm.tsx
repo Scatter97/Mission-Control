@@ -1,17 +1,22 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useState, type FormEvent } from "react";
-import { X } from "lucide-react";
 
+import { OptionPicker } from "../../../shared/ui/OptionPicker";
 import {
-  PROJECT_PRIORITIES,
   PROJECT_STATUSES,
+  STEP_PRIORITIES,
+  STEP_STATUSES,
   emptyProjectInput,
-  formatProjectPriority,
   formatProjectStatus,
+  formatStepPriority,
+  formatStepStatus,
+  priorityTone,
+  projectStatusTone,
+  stepStatusTone,
   type ProjectInput
 } from "../types";
 
 interface ProjectFormProps {
-  title: string;
   initialValue?: ProjectInput;
   submitLabel: string;
   busy?: boolean;
@@ -27,7 +32,6 @@ function linesToItems(value: string): string[] {
 }
 
 export function ProjectForm({
-  title,
   initialValue = emptyProjectInput,
   submitLabel,
   busy = false,
@@ -68,173 +72,243 @@ export function ProjectForm({
     }
   }
 
-  return (
-    <div className="mc-modal-backdrop">
-      <div className="mc-modal" role="dialog" aria-modal="true">
-        <div className="mc-modal-header">
-          <div>
-            <p className="mc-eyebrow">Project</p>
-            <h2>{title}</h2>
-          </div>
+  async function handleBrowseLocalFolder() {
+    try {
+      setError(null);
 
-          <button className="mc-icon-button" type="button" onClick={onCancel}>
-            <X size={16} />
-          </button>
+      const selected = await invoke<string | null>(
+        "pick_project_folder"
+      );
+
+      if (!selected) {
+        return;
+      }
+
+      setValue((current) => ({
+        ...current,
+        localPath: selected
+      }));
+    } catch (browseError) {
+      setError(String(browseError));
+    }
+  }
+
+  return (
+    <form className="mc-project-form-v2" onSubmit={handleSubmit}>
+      <section className="mc-form-section">
+        <div className="mc-form-section-copy">
+          <p className="mc-eyebrow">Project</p>
+          <h2>Project identity</h2>
+          <p>Name the project and set its overall state.</p>
         </div>
 
-        <form className="mc-project-form" onSubmit={handleSubmit}>
-          <label className="mc-field mc-field-wide">
+        <div className="mc-form-section-fields">
+          <label className="mc-field">
             <span>Name</span>
             <input
               autoFocus
               value={value.name}
+              placeholder="Mission Control"
               onChange={(event) =>
                 setValue((current) => ({ ...current, name: event.target.value }))
               }
             />
           </label>
 
-          <label className="mc-field mc-field-wide">
+          <label className="mc-field">
             <span>Description</span>
             <textarea
               rows={3}
               value={value.description}
+              placeholder="What is this project responsible for?"
               onChange={(event) =>
                 setValue((current) => ({ ...current, description: event.target.value }))
               }
             />
           </label>
 
-          <label className="mc-field">
-            <span>Status</span>
-            <select
-              value={value.status}
-              onChange={(event) =>
-                setValue((current) => ({
-                  ...current,
-                  status: event.target.value as ProjectInput["status"]
-                }))
-              }
-            >
-              {PROJECT_STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {formatProjectStatus(status)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <OptionPicker
+            label="Project status"
+            value={value.status}
+            options={PROJECT_STATUSES.map((status) => ({
+              value: status,
+              label: formatProjectStatus(status),
+              tone: projectStatusTone(status)
+            }))}
+            onChange={(status) => setValue((current) => ({ ...current, status }))}
+          />
+        </div>
+      </section>
 
-          <label className="mc-field">
-            <span>Priority</span>
-            <select
-              value={value.priority}
-              onChange={(event) =>
-                setValue((current) => ({
-                  ...current,
-                  priority: event.target.value as ProjectInput["priority"]
-                }))
-              }
-            >
-              {PROJECT_PRIORITIES.map((priority) => (
-                <option key={priority} value={priority}>
-                  {formatProjectPriority(priority)}
-                </option>
-              ))}
-            </select>
-          </label>
+      <section className="mc-form-section">
+        <div className="mc-form-section-copy">
+          <p className="mc-eyebrow">Current work</p>
+          <h2>Current step</h2>
+          <p>Keep the immediate action distinct from the overall project state.</p>
+        </div>
 
+        <div className="mc-form-section-fields">
           <label className="mc-field">
-            <span>Current version</span>
-            <input
-              value={value.currentVersion}
-              onChange={(event) =>
-                setValue((current) => ({ ...current, currentVersion: event.target.value }))
-              }
-            />
-          </label>
-
-          <label className="mc-field">
-            <span>Current phase</span>
-            <input
-              value={value.currentPhase}
-              onChange={(event) =>
-                setValue((current) => ({ ...current, currentPhase: event.target.value }))
-              }
-            />
-          </label>
-
-          <label className="mc-field mc-field-wide">
-            <span>Current Step</span>
+            <span>Current step</span>
             <input
               value={value.currentStep}
+              placeholder="What are you doing right now?"
               onChange={(event) =>
                 setValue((current) => ({ ...current, currentStep: event.target.value }))
               }
             />
           </label>
 
-          <label className="mc-field mc-field-wide">
+          <div className="mc-form-split">
+            <OptionPicker
+              compact
+              label="Step status"
+              value={value.currentStepStatus}
+              options={STEP_STATUSES.map((status) => ({
+                value: status,
+                label: formatStepStatus(status),
+                tone: stepStatusTone(status)
+              }))}
+              onChange={(currentStepStatus) =>
+                setValue((current) => ({ ...current, currentStepStatus }))
+              }
+            />
+
+            <OptionPicker
+              compact
+              label="Step priority"
+              value={value.currentStepPriority}
+              options={STEP_PRIORITIES.map((priority) => ({
+                value: priority,
+                label: formatStepPriority(priority),
+                tone: priorityTone(priority)
+              }))}
+              onChange={(currentStepPriority) =>
+                setValue((current) => ({ ...current, currentStepPriority }))
+              }
+            />
+          </div>
+
+          <div className="mc-form-split">
+            <label className="mc-field">
+              <span>Current phase</span>
+              <input
+                value={value.currentPhase}
+                placeholder="Planning, implementation..."
+                onChange={(event) =>
+                  setValue((current) => ({ ...current, currentPhase: event.target.value }))
+                }
+              />
+            </label>
+
+            <label className="mc-field">
+              <span>Current version</span>
+              <input
+                value={value.currentVersion}
+                placeholder="v0.1.2"
+                onChange={(event) =>
+                  setValue((current) => ({ ...current, currentVersion: event.target.value }))
+                }
+              />
+            </label>
+          </div>
+
+          <label className="mc-field">
             <span>Last completed step</span>
             <input
               value={value.lastCompletedStep}
+              placeholder="Most recent completed action"
               onChange={(event) =>
                 setValue((current) => ({ ...current, lastCompletedStep: event.target.value }))
               }
             />
           </label>
+        </div>
+      </section>
 
-          <label className="mc-field mc-field-wide">
+      <section className="mc-form-section">
+        <div className="mc-form-section-copy">
+          <p className="mc-eyebrow">Queue</p>
+          <h2>Next steps & blockers</h2>
+          <p>One item per line. These stay lightweight until the Tasks module arrives.</p>
+        </div>
+
+        <div className="mc-form-section-fields mc-form-split">
+          <label className="mc-field">
             <span>Next steps</span>
             <textarea
-              rows={4}
+              rows={6}
               value={nextSteps}
               onChange={(event) => setNextSteps(event.target.value)}
-              placeholder="One step per line"
+              placeholder={"Implement settings shell\nVerify Windows build"}
             />
           </label>
 
-          <label className="mc-field mc-field-wide">
+          <label className="mc-field">
             <span>Blockers</span>
             <textarea
-              rows={3}
+              rows={6}
               value={blockers}
               onChange={(event) => setBlockers(event.target.value)}
               placeholder="One blocker per line"
             />
           </label>
+        </div>
+      </section>
 
+      <section className="mc-form-section">
+        <div className="mc-form-section-copy">
+          <p className="mc-eyebrow">Location</p>
+          <h2>Project location</h2>
+          <p>Connect the project to its local workspace and repository.</p>
+        </div>
+
+        <div className="mc-form-section-fields mc-form-split">
           <label className="mc-field">
-            <span>Local path</span>
-            <input
-              value={value.localPath ?? ""}
-              onChange={(event) =>
-                setValue((current) => ({ ...current, localPath: event.target.value }))
-              }
-            />
+            <span>Local folder</span>
+
+            <div className="mc-path-picker-row">
+              <input
+                value={value.localPath ?? ""}
+                placeholder="C:\Projects\Mission-Control"
+                onChange={(event) =>
+                  setValue((current) => ({ ...current, localPath: event.target.value }))
+                }
+              />
+
+              <button
+                className="mc-button mc-path-picker-button"
+                type="button"
+                onClick={handleBrowseLocalFolder}
+              >
+                Browse…
+              </button>
+            </div>
           </label>
 
           <label className="mc-field">
-            <span>Repository URL</span>
+            <span>Repository</span>
             <input
               value={value.repoUrl ?? ""}
+              placeholder="https://github.com/..."
               onChange={(event) =>
                 setValue((current) => ({ ...current, repoUrl: event.target.value }))
               }
             />
           </label>
+        </div>
+      </section>
 
-          {error ? <p className="mc-form-error">{error}</p> : null}
+      {error ? <p className="mc-form-error">{error}</p> : null}
 
-          <div className="mc-modal-actions">
-            <button className="mc-button" type="button" onClick={onCancel}>
-              Cancel
-            </button>
-            <button className="mc-button mc-button-primary" type="submit" disabled={busy}>
-              {busy ? "Saving..." : submitLabel}
-            </button>
-          </div>
-        </form>
+      <div className="mc-form-footer">
+        <button className="mc-button" type="button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button className="mc-button mc-button-primary" type="submit" disabled={busy}>
+          {busy ? "Saving..." : submitLabel}
+        </button>
       </div>
-    </div>
+    </form>
   );
 }

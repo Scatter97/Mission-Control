@@ -11,8 +11,8 @@ export class LocalBackend implements MissionControlBackend {
     return invoke<BackendCapabilities>("backend_capabilities");
   }
 
-  listProjects(): Promise<Project[]> {
-    return invoke<Project[]>("projects_list");
+  listProjects(archived = false): Promise<Project[]> {
+    return invoke<Project[]>("projects_list", { archived });
   }
 
   getProject(id: string): Promise<Project | null> {
@@ -29,6 +29,10 @@ export class LocalBackend implements MissionControlBackend {
 
   archiveProject(id: string): Promise<void> {
     return invoke<void>("projects_archive", { id });
+  }
+
+  restoreProject(id: string): Promise<void> {
+    return invoke<void>("projects_restore", { id });
   }
 
   deleteProject(id: string): Promise<void> {
