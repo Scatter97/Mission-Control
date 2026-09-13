@@ -6,3 +6,7 @@ src-tauri/target/
 .idea/
 *.log
 .DS_Store
+# Local development artifacts
+.patchforge/
+__pycache__/
+*.pyc
