@@ -1,6 +1,7 @@
 import { FolderKanban } from "lucide-react";
 
 import type { MissionControlModule } from "../../app/modules/types";
+import { ProjectDetailPage } from "./pages/ProjectDetailPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 
 export const projectsModule: MissionControlModule = {
@@ -21,6 +22,10 @@ export const projectsModule: MissionControlModule = {
     {
       path: "/projects",
       component: ProjectsPage
+    },
+    {
+      path: "/projects/:id",
+      component: ProjectDetailPage
     }
   ]
 };
