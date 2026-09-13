@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Archive,
   ArrowLeft,
@@ -76,6 +76,44 @@ export function ProjectDetailPage() {
 
   const projectQuery =
     useProject(id);
+
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+
+    let active = true;
+
+    async function consumeTransition() {
+      try {
+        const changed = await invoke<boolean>(
+          "projects_consume_step_transition",
+          { id }
+        );
+
+        if (changed && active) {
+          await projectQuery.refetch();
+        }
+      } catch (error) {
+        console.error(
+          "Could not consume Mission Control step transition:",
+          error
+        );
+      }
+    }
+
+    void consumeTransition();
+
+    const interval = window.setInterval(
+      () => void consumeTransition(),
+      1500
+    );
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [id, projectQuery.refetch]);
 
   const updateProject =
     useUpdateProject();

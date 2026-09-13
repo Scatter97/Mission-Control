@@ -1,5 +1,6 @@
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{
     fs,
     path::Path,
@@ -9,7 +10,7 @@ use std::{
 use tauri::State;
 use uuid::Uuid;
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 const PROJECT_STATUSES: &[&str] = &[
     "active",
     "planning",
@@ -97,6 +98,26 @@ impl ProjectStore {
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS project_step_history (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                transition_key TEXT NOT NULL,
+                step TEXT NOT NULL,
+                status_before TEXT,
+                priority TEXT,
+                tags_json TEXT NOT NULL DEFAULT '[]',
+                phase TEXT,
+                version TEXT,
+                completed_at INTEGER NOT NULL,
+                UNIQUE(project_id, transition_key),
+                FOREIGN KEY(project_id)
+                    REFERENCES projects(id)
+                    ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_project_step_history_project
+                ON project_step_history(project_id, completed_at DESC);
             "#,
         )?;
 
@@ -357,6 +378,420 @@ pub fn projects_update(
         .map_err(|e| e.to_string())?;
 
     get(&connection, &id)?.ok_or_else(|| "Project not found".into())
+}
+
+
+fn transition_string(
+    object: &serde_json::Map<String, Value>,
+    key: &str,
+    context: &str,
+) -> Result<String, String> {
+    object
+        .get(key)
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| format!("{context}.{key} must be a non-empty string"))
+}
+
+fn transition_string_array(
+    value: Option<&Value>,
+    context: &str,
+) -> Result<Vec<String>, String> {
+    let Some(value) = value else {
+        return Ok(Vec::new());
+    };
+
+    let array = value
+        .as_array()
+        .ok_or_else(|| format!("{context} must be an array"))?;
+
+    array
+        .iter()
+        .enumerate()
+        .map(|(index, value)| {
+            value
+                .as_str()
+                .filter(|value| !value.trim().is_empty())
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    format!("{context}[{index}] must be a non-empty string")
+                })
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub fn projects_consume_step_transition(
+    id: String,
+    store: State<'_, ProjectStore>,
+) -> Result<bool, String> {
+    let connection = store
+        .connection
+        .lock()
+        .map_err(|_| "Database lock failed".to_string())?;
+
+    let project = match get(&connection, &id)? {
+        Some(project) => project,
+        None => return Ok(false),
+    };
+
+    let local_path = match project.local_path.as_deref() {
+        Some(path) if !path.trim().is_empty() => path,
+        _ => return Ok(false),
+    };
+
+    let config_path =
+        Path::new(local_path).join(".mission-control.json");
+
+    if !config_path.exists() {
+        return Ok(false);
+    }
+
+    let config_text =
+        fs::read_to_string(&config_path)
+            .map_err(|error| {
+                format!(
+                    "Could not read {}: {error}",
+                    config_path.display()
+                )
+            })?;
+
+    let mut config: Value =
+        serde_json::from_str(&config_text)
+            .map_err(|error| {
+                format!(
+                    "Invalid {}: {error}",
+                    config_path.display()
+                )
+            })?;
+
+    let root = config
+        .as_object_mut()
+        .ok_or_else(|| {
+            ".mission-control.json must contain a JSON object."
+                .to_string()
+        })?;
+
+    let transition = match root.get("stepTransition") {
+        Some(value) => value.clone(),
+        None => return Ok(false),
+    };
+
+    let transition_object = transition
+        .as_object()
+        .ok_or_else(|| {
+            "stepTransition must be an object".to_string()
+        })?;
+
+    if transition_object
+        .get("action")
+        .and_then(Value::as_str)
+        != Some("complete_current_step")
+    {
+        return Err(
+            "Unsupported stepTransition action.".to_string()
+        );
+    }
+
+    let completed = transition_object
+        .get("completedStep")
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            "stepTransition.completedStep must be an object"
+                .to_string()
+        })?;
+
+    let next = transition_object
+        .get("nextStep")
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            "stepTransition.nextStep must be an object"
+                .to_string()
+        })?;
+
+    let completed_step =
+        transition_string(
+            completed,
+            "step",
+            "stepTransition.completedStep",
+        )?;
+
+    let next_step =
+        transition_string(
+            next,
+            "step",
+            "stepTransition.nextStep",
+        )?;
+
+    let next_status =
+        transition_string(
+            next,
+            "status",
+            "stepTransition.nextStep",
+        )?;
+
+    if !STEP_STATUSES.contains(&next_status.as_str()) {
+        return Err(
+            "stepTransition.nextStep.status is invalid"
+                .to_string()
+        );
+    }
+
+    let next_priority =
+        transition_string(
+            next,
+            "priority",
+            "stepTransition.nextStep",
+        )?;
+
+    if !STEP_PRIORITIES.contains(&next_priority.as_str()) {
+        return Err(
+            "stepTransition.nextStep.priority is invalid"
+                .to_string()
+        );
+    }
+
+    let next_tags =
+        transition_string_array(
+            next.get("tags"),
+            "stepTransition.nextStep.tags",
+        )?;
+
+    let completed_tags =
+        transition_string_array(
+            completed.get("tags"),
+            "stepTransition.completedStep.tags",
+        )?;
+
+    let blocker_transition = transition_object
+        .get("blockers")
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            "stepTransition.blockers must be an object"
+                .to_string()
+        })?;
+
+    let clear_all = blocker_transition
+        .get("clearAll")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+
+    let remove_blockers =
+        transition_string_array(
+            blocker_transition.get("remove"),
+            "stepTransition.blockers.remove",
+        )?;
+
+    let add_blockers =
+        transition_string_array(
+            blocker_transition.get("add"),
+            "stepTransition.blockers.add",
+        )?;
+
+    let mut blockers = root
+        .get("blockers")
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_else(|| project.blockers.clone());
+
+    if clear_all {
+        blockers.clear();
+    } else {
+        for blocker in &remove_blockers {
+            blockers.retain(|existing| existing != blocker);
+        }
+    }
+
+    for blocker in add_blockers {
+        if !blockers.contains(&blocker) {
+            blockers.push(blocker);
+        }
+    }
+
+    let mut next_steps = root
+        .get("nextSteps")
+        .and_then(Value::as_array)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_else(|| project.next_steps.clone());
+
+    if let Some(index) =
+        next_steps.iter().position(|step| step == &next_step)
+    {
+        next_steps.remove(index);
+    }
+
+    let transition_key =
+        serde_json::to_string(&transition)
+            .map_err(|error| error.to_string())?;
+
+    let completed_status = completed
+        .get("status")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+
+    let completed_priority = completed
+        .get("priority")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+
+    let completed_phase = completed
+        .get("phase")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+
+    let completed_version = completed
+        .get("version")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+
+    let completed_tags_json =
+        serde_json::to_string(&completed_tags)
+            .map_err(|error| error.to_string())?;
+
+    connection
+        .execute(
+            "INSERT OR IGNORE INTO project_step_history (
+                id,
+                project_id,
+                transition_key,
+                step,
+                status_before,
+                priority,
+                tags_json,
+                phase,
+                version,
+                completed_at
+             ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+            params![
+                Uuid::new_v4().to_string(),
+                id,
+                transition_key,
+                completed_step,
+                completed_status,
+                completed_priority,
+                completed_tags_json,
+                completed_phase,
+                completed_version,
+                now()
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+
+    let next_steps_json =
+        serde_json::to_string(&next_steps)
+            .map_err(|error| error.to_string())?;
+
+    let blockers_json =
+        serde_json::to_string(&blockers)
+            .map_err(|error| error.to_string())?;
+
+    connection
+        .execute(
+            "UPDATE projects SET
+                current_step=?2,
+                current_step_status=?3,
+                current_step_priority=?4,
+                last_completed_step=?5,
+                next_steps_json=?6,
+                blockers_json=?7,
+                updated_at=?8
+             WHERE id=?1",
+            params![
+                id,
+                next_step,
+                next_status,
+                next_priority,
+                completed_step,
+                next_steps_json,
+                blockers_json,
+                now()
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+
+    root.insert(
+        "lastCompletedStep".to_string(),
+        Value::String(completed_step),
+    );
+
+    root.insert(
+        "currentStep".to_string(),
+        Value::String(next_step),
+    );
+
+    root.insert(
+        "currentStepStatus".to_string(),
+        Value::String(next_status),
+    );
+
+    root.insert(
+        "currentStepPriority".to_string(),
+        Value::String(next_priority),
+    );
+
+    root.insert(
+        "currentStepTags".to_string(),
+        Value::Array(
+            next_tags
+                .into_iter()
+                .map(Value::String)
+                .collect()
+        ),
+    );
+
+    root.insert(
+        "nextSteps".to_string(),
+        Value::Array(
+            next_steps
+                .into_iter()
+                .map(Value::String)
+                .collect()
+        ),
+    );
+
+    root.insert(
+        "blockers".to_string(),
+        Value::Array(
+            blockers
+                .into_iter()
+                .map(Value::String)
+                .collect()
+        ),
+    );
+
+    root.remove("stepTransition");
+
+    let output =
+        serde_json::to_string_pretty(&config)
+            .map_err(|error| error.to_string())?
+        + "\n";
+
+    fs::write(&config_path, output)
+        .map_err(|error| {
+            format!(
+                "Could not write {}: {error}",
+                config_path.display()
+            )
+        })?;
+
+    Ok(true)
 }
 
 #[tauri::command]

@@ -1475,6 +1475,7 @@ pub fn run() {
             projects::projects_get,
             projects::projects_create,
             projects::projects_update,
+            projects::projects_consume_step_transition,
             projects::projects_archive,
             projects::projects_restore,
             projects::projects_delete
