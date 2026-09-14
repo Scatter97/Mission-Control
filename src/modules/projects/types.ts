@@ -38,6 +38,18 @@ export interface Project {
   updatedAt: number;
 }
 
+export interface ProjectStepHistoryEntry {
+  id: string;
+  projectId: string;
+  step: string;
+  statusBefore: StepStatus | null;
+  priority: StepPriority | null;
+  tags: string[];
+  phase: string | null;
+  version: string | null;
+  completedAt: number;
+}
+
 export interface ProjectInput {
   name: string;
   description: string;

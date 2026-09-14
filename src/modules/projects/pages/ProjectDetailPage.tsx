@@ -1,13 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type DragEvent } from "react";
 import {
   Archive,
   ArrowLeft,
   CheckCircle2,
   ExternalLink,
   FolderOpen,
+  GripVertical,
   MoreHorizontal,
   Pencil,
+  Plus,
   RotateCcw,
   Trash2
 } from "lucide-react";
@@ -26,8 +28,10 @@ import {
   useArchiveProject,
   useDeleteProject,
   useProject,
+  useProjectStepHistory,
   useRestoreProject,
-  useUpdateProject
+  useUpdateProject,
+  useUpdateProjectNextSteps
 } from "../hooks";
 import {
   formatProjectStatus,
@@ -38,6 +42,10 @@ import {
   projectToInput,
   stepStatusTone
 } from "../types";
+
+type ActiveDetailTab =
+  | "Overview"
+  | "Activity";
 
 type ConfirmAction =
   | "archive"
@@ -77,6 +85,15 @@ export function ProjectDetailPage() {
   const projectQuery =
     useProject(id);
 
+  const [activeTab, setActiveTab] =
+    useState<ActiveDetailTab>("Overview");
+
+  const historyQuery =
+    useProjectStepHistory(
+      id,
+      activeTab === "Activity"
+    );
+
   useEffect(() => {
     if (!id) {
       return;
@@ -92,7 +109,10 @@ export function ProjectDetailPage() {
         );
 
         if (changed && active) {
-          await projectQuery.refetch();
+          await Promise.all([
+            projectQuery.refetch(),
+            historyQuery.refetch()
+          ]);
         }
       } catch (error) {
         console.error(
@@ -113,10 +133,17 @@ export function ProjectDetailPage() {
       active = false;
       window.clearInterval(interval);
     };
-  }, [id, projectQuery.refetch]);
+  }, [
+    id,
+    projectQuery.refetch,
+    historyQuery.refetch
+  ]);
 
   const updateProject =
     useUpdateProject();
+
+  const updateNextSteps =
+    useUpdateProjectNextSteps();
 
   const archiveProject =
     useArchiveProject();
@@ -146,6 +173,21 @@ export function ProjectDetailPage() {
   ] = useState<ConfirmAction>(
     null
   );
+
+  const [
+    editingNextSteps,
+    setEditingNextSteps
+  ] = useState(false);
+
+  const [
+    draftNextSteps,
+    setDraftNextSteps
+  ] = useState<string[]>([]);
+
+  const [
+    draggedStepIndex,
+    setDraggedStepIndex
+  ] = useState<number | null>(null);
 
   if (projectQuery.isLoading) {
     return (
@@ -268,19 +310,144 @@ export function ProjectDetailPage() {
   async function addNextStep(
     step: string
   ) {
-    await updateProject.mutateAsync({
+    await updateNextSteps.mutateAsync({
       id: project.id,
-      input: {
-        ...projectToInput(project),
-        nextSteps: [
-          ...project.nextSteps,
-          step
-        ]
-      }
+      nextSteps: [
+        ...project.nextSteps,
+        step
+      ]
     });
 
     setAddingStep(false);
   }
+
+  function beginNextStepsEdit() {
+    setDraftNextSteps([...project.nextSteps]);
+    setEditingNextSteps(true);
+  }
+
+  function cancelNextStepsEdit() {
+    setDraftNextSteps([]);
+    setDraggedStepIndex(null);
+    setEditingNextSteps(false);
+  }
+
+  function addDraftNextStep() {
+    setDraftNextSteps(
+      (steps) => [...steps, ""]
+    );
+  }
+
+  function updateDraftNextStep(
+    index: number,
+    value: string
+  ) {
+    setDraftNextSteps(
+      (steps) =>
+        steps.map(
+          (step, stepIndex) =>
+            stepIndex === index
+              ? value
+              : step
+        )
+    );
+  }
+
+  function removeDraftNextStep(
+    index: number
+  ) {
+    setDraftNextSteps(
+      (steps) =>
+        steps.filter(
+          (_, stepIndex) =>
+            stepIndex !== index
+        )
+    );
+  }
+
+  function handleStepDragStart(
+    event: DragEvent<HTMLButtonElement>,
+    index: number
+  ) {
+    setDraggedStepIndex(index);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData(
+      "text/plain",
+      String(index)
+    );
+  }
+
+  function handleStepDrop(
+    event: DragEvent<HTMLDivElement>,
+    targetIndex: number
+  ) {
+    event.preventDefault();
+
+    const sourceIndex =
+      draggedStepIndex ??
+      Number(
+        event.dataTransfer.getData(
+          "text/plain"
+        )
+      );
+
+    if (
+      !Number.isInteger(sourceIndex) ||
+      sourceIndex < 0 ||
+      sourceIndex >= draftNextSteps.length ||
+      sourceIndex === targetIndex
+    ) {
+      setDraggedStepIndex(null);
+      return;
+    }
+
+    setDraftNextSteps(
+      (steps) => {
+        const reordered = [...steps];
+        const [moved] =
+          reordered.splice(sourceIndex, 1);
+
+        reordered.splice(
+          targetIndex,
+          0,
+          moved
+        );
+
+        return reordered;
+      }
+    );
+
+    setDraggedStepIndex(null);
+  }
+
+  async function saveNextSteps() {
+    const cleaned =
+      draftNextSteps.map(
+        (step) => step.trim()
+      );
+
+    if (
+      cleaned.some(
+        (step) => !step
+      )
+    ) {
+      return;
+    }
+
+    await updateNextSteps.mutateAsync({
+      id: project.id,
+      nextSteps: cleaned
+    });
+
+    setEditingNextSteps(false);
+    setDraftNextSteps([]);
+    setDraggedStepIndex(null);
+  }
+
+  const nextStepsValid =
+    draftNextSteps.every(
+      (step) => step.trim().length > 0
+    );
 
   return (
     <section className="mc-page mc-project-detail-page">
@@ -416,29 +583,41 @@ export function ProjectDetailPage() {
         role="tablist"
         aria-label="Project sections"
       >
-        {detailTabs.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            className={
-              tab === "Overview"
-                ? "is-active"
-                : ""
-            }
-            disabled={
-              tab !== "Overview"
-            }
-            title={
-              tab === "Overview"
-                ? undefined
-                : "Planned for a future Mission Control update"
-            }
-          >
-            {tab}
-          </button>
-        ))}
+        {detailTabs.map((tab) => {
+          const enabled =
+            tab === "Overview" ||
+            tab === "Activity";
+
+          return (
+            <button
+              key={tab}
+              type="button"
+              className={
+                tab === activeTab
+                  ? "is-active"
+                  : ""
+              }
+              disabled={!enabled}
+              title={
+                enabled
+                  ? undefined
+                  : "Planned for a future Mission Control update"
+              }
+              onClick={() => {
+                if (enabled) {
+                  setActiveTab(
+                    tab as ActiveDetailTab
+                  );
+                }
+              }}
+            >
+              {tab}
+            </button>
+          );
+        })}
       </div>
 
+      {activeTab === "Overview" ? (
       <div className="mc-project-detail-grid-v2">
         <div className="mc-project-detail-main-v2">
           <section className="mc-panel mc-current-step-card">
@@ -492,27 +671,151 @@ export function ProjectDetailPage() {
 
           <div className="mc-detail-pair">
             <section className="mc-panel mc-detail-section-v2">
-              <div className="mc-section-heading-inline">
-                <h2>Next steps</h2>
-                <span>
-                  {project.nextSteps.length}
-                </span>
+              <div className="mc-section-heading-inline mc-next-steps-heading">
+                <div className="mc-next-steps-title">
+                  <h2>Next steps</h2>
+
+                  <span>
+                    {editingNextSteps
+                      ? draftNextSteps.length
+                      : project.nextSteps.length}
+                  </span>
+                </div>
+
+                {!project.archived ? (
+                  editingNextSteps ? (
+                    <div className="mc-next-step-actions">
+                      <button
+                        className="mc-button mc-button-compact"
+                        type="button"
+                        disabled={updateNextSteps.isPending}
+                        onClick={cancelNextStepsEdit}
+                      >
+                        Cancel
+                      </button>
+
+                      <button
+                        className="mc-button mc-button-primary mc-button-compact"
+                        type="button"
+                        disabled={
+                          updateNextSteps.isPending ||
+                          !nextStepsValid
+                        }
+                        onClick={() =>
+                          void saveNextSteps()
+                        }
+                      >
+                        {updateNextSteps.isPending
+                          ? "Saving..."
+                          : "Save"}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="mc-button mc-button-compact"
+                      type="button"
+                      onClick={beginNextStepsEdit}
+                    >
+                      Edit
+                    </button>
+                  )
+                ) : null}
               </div>
 
-              {project.nextSteps.length ? (
+              {editingNextSteps ? (
+                <div className="mc-next-steps-editor">
+                  {draftNextSteps.map(
+                    (step, index) => (
+                      <div
+                        key={index}
+                        className={
+                          draggedStepIndex === index
+                            ? "mc-next-step-edit-row is-dragging"
+                            : "mc-next-step-edit-row"
+                        }
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                          event.dataTransfer.dropEffect =
+                            "move";
+                        }}
+                        onDrop={(event) =>
+                          handleStepDrop(
+                            event,
+                            index
+                          )
+                        }
+                      >
+                        <button
+                          className="mc-drag-handle"
+                          type="button"
+                          draggable
+                          aria-label={`Drag step ${index + 1}`}
+                          title="Drag to reorder"
+                          onDragStart={(event) =>
+                            handleStepDragStart(
+                              event,
+                              index
+                            )
+                          }
+                          onDragEnd={() =>
+                            setDraggedStepIndex(null)
+                          }
+                        >
+                          <GripVertical size={15} />
+                        </button>
+
+                        <input
+                          className="mc-next-step-input"
+                          value={step}
+                          aria-label={`Step ${index + 1}`}
+                          onChange={(event) =>
+                            updateDraftNextStep(
+                              index,
+                              event.target.value
+                            )
+                          }
+                        />
+
+                        <button
+                          className="mc-next-step-remove"
+                          type="button"
+                          aria-label={`Delete step ${index + 1}`}
+                          title="Delete step"
+                          onClick={() =>
+                            removeDraftNextStep(index)
+                          }
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    )
+                  )}
+
+                  <button
+                    className="mc-add-next-step-inline"
+                    type="button"
+                    onClick={addDraftNextStep}
+                  >
+                    <Plus size={14} />
+                    Add step
+                  </button>
+
+                  {!nextStepsValid ? (
+                    <p className="mc-next-steps-validation">
+                      Steps cannot be blank.
+                    </p>
+                  ) : null}
+                </div>
+              ) : project.nextSteps.length ? (
                 <ol className="mc-work-list">
                   {project.nextSteps.map(
                     (step, index) => (
-                      <li
-                        key={`${step}-${index}`}
-                      >
+                      <li key={`${step}-${index}`}>
                         <span className="mc-work-index">
                           {index + 1}
                         </span>
 
-                        <span>
-                          {step}
-                        </span>
+                        <span>{step}</span>
                       </li>
                     )
                   )}
@@ -746,6 +1049,153 @@ export function ProjectDetailPage() {
           </div>
         </aside>
       </div>
+      ) : (
+        <section className="mc-panel mc-activity-panel">
+          <div className="mc-activity-header">
+            <div>
+              <p className="mc-eyebrow">
+                Activity
+              </p>
+
+              <h2>Completed steps</h2>
+            </div>
+
+            {!historyQuery.isLoading &&
+            !historyQuery.isError ? (
+              <span className="mc-activity-count">
+                {historyQuery.data?.length ?? 0}
+              </span>
+            ) : null}
+          </div>
+
+          {historyQuery.isLoading ? (
+            <div className="mc-activity-state">
+              <p>Loading completed steps...</p>
+            </div>
+          ) : historyQuery.isError ? (
+            <div className="mc-activity-state">
+              <p>
+                Could not load completed steps.
+              </p>
+
+              <button
+                className="mc-button mc-button-compact"
+                type="button"
+                onClick={() =>
+                  void historyQuery.refetch()
+                }
+              >
+                Try again
+              </button>
+            </div>
+          ) : historyQuery.data?.length ? (
+            <div className="mc-activity-list">
+              {historyQuery.data.map(
+                (entry) => (
+                  <article
+                    key={entry.id}
+                    className="mc-activity-entry"
+                  >
+                    <div className="mc-activity-marker">
+                      <CheckCircle2 size={15} />
+                    </div>
+
+                    <div className="mc-activity-entry-body">
+                      <div className="mc-activity-entry-top">
+                        <div>
+                          <strong>
+                            {entry.step}
+                          </strong>
+
+                          <time>
+                            Completed{" "}
+                            {formatUpdated(
+                              entry.completedAt
+                            )}
+                          </time>
+                        </div>
+
+                        <div className="mc-badge-row">
+                          {entry.statusBefore ? (
+                            <StateBadge
+                              label={`Previously ${formatStepStatus(
+                                entry.statusBefore
+                              )}`}
+                              tone={stepStatusTone(
+                                entry.statusBefore
+                              )}
+                            />
+                          ) : null}
+
+                          {entry.priority ? (
+                            <StateBadge
+                              label={formatStepPriority(
+                                entry.priority
+                              )}
+                              tone={priorityTone(
+                                entry.priority
+                              )}
+                            />
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {(entry.phase ||
+                        entry.version) ? (
+                        <div className="mc-activity-meta">
+                          {entry.phase ? (
+                            <span>
+                              Phase: {entry.phase}
+                            </span>
+                          ) : null}
+
+                          {entry.phase &&
+                          entry.version ? (
+                            <span>•</span>
+                          ) : null}
+
+                          {entry.version ? (
+                            <span>
+                              Version: {entry.version}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
+
+                      {entry.tags.length ? (
+                        <div className="mc-activity-tags">
+                          {entry.tags.map(
+                            (tag) => (
+                              <span
+                                key={tag}
+                                className="mc-activity-tag"
+                              >
+                                {tag}
+                              </span>
+                            )
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  </article>
+                )
+              )}
+            </div>
+          ) : (
+            <div className="mc-activity-empty">
+              <CheckCircle2 size={20} />
+
+              <h3>
+                No completed steps yet.
+              </h3>
+
+              <p>
+                Completed steps will appear here.
+              </p>
+            </div>
+          )}
+        </section>
+      )}
 
       {editing && !project.archived ? (
         <div className="mc-dialog-backdrop">

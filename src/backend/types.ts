@@ -1,4 +1,8 @@
-import type { Project, ProjectInput } from "../modules/projects/types";
+import type {
+  Project,
+  ProjectInput,
+  ProjectStepHistoryEntry
+} from "../modules/projects/types";
 
 export interface BackendCapabilities {
   projects: boolean;
@@ -17,8 +21,10 @@ export interface MissionControlBackend {
 
   listProjects(archived?: boolean): Promise<Project[]>;
   getProject(id: string): Promise<Project | null>;
+  getProjectStepHistory(id: string): Promise<ProjectStepHistoryEntry[]>;
   createProject(input: ProjectInput): Promise<Project>;
   updateProject(id: string, input: ProjectInput): Promise<Project>;
+  updateProjectNextSteps(id: string, nextSteps: string[]): Promise<Project>;
   archiveProject(id: string): Promise<void>;
   restoreProject(id: string): Promise<void>;
   deleteProject(id: string): Promise<void>;

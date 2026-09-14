@@ -66,6 +66,20 @@ pub struct ProjectInput {
     repo_url: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectStepHistoryEntry {
+    id: String,
+    project_id: String,
+    step: String,
+    status_before: Option<String>,
+    priority: Option<String>,
+    tags: Vec<String>,
+    phase: Option<String>,
+    version: Option<String>,
+    completed_at: i64,
+}
+
 impl ProjectStore {
     pub fn open(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
         if let Some(parent) = path.parent() {
@@ -238,6 +252,25 @@ fn get(connection: &Connection, id: &str) -> Result<Option<Project>, String> {
         .map_err(|error| error.to_string())
 }
 
+fn row_to_step_history(
+    row: &Row<'_>,
+) -> rusqlite::Result<ProjectStepHistoryEntry> {
+    let tags_json: String = row.get("tags_json")?;
+
+    Ok(ProjectStepHistoryEntry {
+        id: row.get("id")?,
+        project_id: row.get("project_id")?,
+        step: row.get("step")?,
+        status_before: row.get("status_before")?,
+        priority: row.get("priority")?,
+        tags: serde_json::from_str(&tags_json)
+            .unwrap_or_default(),
+        phase: row.get("phase")?,
+        version: row.get("version")?,
+        completed_at: row.get("completed_at")?,
+    })
+}
+
 #[tauri::command]
 pub fn projects_list(
     archived: bool,
@@ -270,6 +303,42 @@ pub fn projects_get(
         .lock()
         .map_err(|_| "Database lock failed".to_string())?;
     get(&connection, &id)
+}
+
+#[tauri::command]
+pub fn projects_step_history(
+    id: String,
+    store: State<'_, ProjectStore>,
+) -> Result<Vec<ProjectStepHistoryEntry>, String> {
+    let connection = store
+        .connection
+        .lock()
+        .map_err(|_| "Database lock failed".to_string())?;
+
+    let mut statement = connection
+        .prepare(
+            "SELECT
+                id,
+                project_id,
+                step,
+                status_before,
+                priority,
+                tags_json,
+                phase,
+                version,
+                completed_at
+             FROM project_step_history
+             WHERE project_id = ?1
+             ORDER BY completed_at DESC, id DESC"
+        )
+        .map_err(|error| error.to_string())?;
+
+    let rows = statement
+        .query_map([id], row_to_step_history)
+        .map_err(|error| error.to_string())?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -378,6 +447,130 @@ pub fn projects_update(
         .map_err(|e| e.to_string())?;
 
     get(&connection, &id)?.ok_or_else(|| "Project not found".into())
+}
+
+
+
+fn write_next_steps_to_project_config(
+    local_path: Option<&str>,
+    next_steps: &[String],
+) -> Result<(), String> {
+    let Some(local_path) = local_path else {
+        return Ok(());
+    };
+
+    if local_path.trim().is_empty() {
+        return Ok(());
+    }
+
+    let path =
+        Path::new(local_path).join(".mission-control.json");
+
+    if !path.exists() {
+        return Ok(());
+    }
+
+    let text =
+        fs::read_to_string(&path)
+            .map_err(|error| {
+                format!(
+                    "Could not read {}: {error}",
+                    path.display()
+                )
+            })?;
+
+    let mut config: Value =
+        serde_json::from_str(&text)
+            .map_err(|error| {
+                format!(
+                    "Invalid {}: {error}",
+                    path.display()
+                )
+            })?;
+
+    let root = config
+        .as_object_mut()
+        .ok_or_else(|| {
+            ".mission-control.json must contain a JSON object."
+                .to_string()
+        })?;
+
+    root.insert(
+        "nextSteps".to_string(),
+        Value::Array(
+            next_steps
+                .iter()
+                .cloned()
+                .map(Value::String)
+                .collect()
+        ),
+    );
+
+    let output =
+        serde_json::to_string_pretty(&config)
+            .map_err(|error| error.to_string())?
+        + "\n";
+
+    fs::write(&path, output)
+        .map_err(|error| {
+            format!(
+                "Could not write {}: {error}",
+                path.display()
+            )
+        })
+}
+
+#[tauri::command]
+pub fn projects_update_next_steps(
+    id: String,
+    next_steps: Vec<String>,
+    store: State<'_, ProjectStore>,
+) -> Result<Project, String> {
+    let cleaned = next_steps
+        .into_iter()
+        .map(|step| step.trim().to_string())
+        .collect::<Vec<_>>();
+
+    if cleaned.iter().any(|step| step.is_empty()) {
+        return Err(
+            "Next steps cannot contain blank items."
+                .to_string()
+        );
+    }
+
+    let connection = store
+        .connection
+        .lock()
+        .map_err(|_| "Database lock failed".to_string())?;
+
+    let project = get(&connection, &id)?
+        .ok_or_else(|| "Project not found".to_string())?;
+
+    write_next_steps_to_project_config(
+        project.local_path.as_deref(),
+        &cleaned,
+    )?;
+
+    let next_steps_json =
+        serde_json::to_string(&cleaned)
+            .map_err(|error| error.to_string())?;
+
+    connection
+        .execute(
+            "UPDATE projects
+             SET next_steps_json=?2,
+                 updated_at=?3
+             WHERE id=?1",
+            params![
+                id,
+                next_steps_json,
+                now()
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+
+    get(&connection, &id)?
+        .ok_or_else(|| "Project not found".to_string())
 }
 
 

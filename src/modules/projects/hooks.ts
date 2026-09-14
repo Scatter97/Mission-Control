@@ -6,7 +6,8 @@ import type { ProjectInput } from "./types";
 const projectKeys = {
   root: ["projects"] as const,
   list: (archived: boolean) => ["projects", "list", archived] as const,
-  detail: (id: string) => ["projects", "detail", id] as const
+  detail: (id: string) => ["projects", "detail", id] as const,
+  history: (id: string) => ["projects", "history", id] as const
 };
 
 export function useProjects(archived = false) {
@@ -25,6 +26,20 @@ export function useProject(id: string | undefined) {
     queryKey: projectKeys.detail(id ?? ""),
     queryFn: () => backend.getProject(id!),
     enabled: Boolean(id)
+  });
+}
+
+export function useProjectStepHistory(
+  id: string | undefined,
+  enabled = true
+) {
+  const backend = useBackend();
+
+  return useQuery({
+    queryKey: projectKeys.history(id ?? ""),
+    queryFn: () =>
+      backend.getProjectStepHistory(id!),
+    enabled: Boolean(id) && enabled
   });
 }
 
@@ -51,6 +66,35 @@ export function useUpdateProject() {
     onSuccess: (project) => {
       queryClient.setQueryData(projectKeys.detail(project.id), project);
       void queryClient.invalidateQueries({ queryKey: projectKeys.root });
+    }
+  });
+}
+
+export function useUpdateProjectNextSteps() {
+  const backend = useBackend();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      nextSteps
+    }: {
+      id: string;
+      nextSteps: string[];
+    }) =>
+      backend.updateProjectNextSteps(
+        id,
+        nextSteps
+      ),
+    onSuccess: (project) => {
+      queryClient.setQueryData(
+        projectKeys.detail(project.id),
+        project
+      );
+
+      void queryClient.invalidateQueries({
+        queryKey: projectKeys.root
+      });
     }
   });
 }
